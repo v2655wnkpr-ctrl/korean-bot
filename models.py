@@ -17,8 +17,6 @@ class Student(Base):
     tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(100))
     username: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    
-    # Смещение часового пояса (0 = МСК, +7 = Владивосток)
     timezone_offset: Mapped[int] = mapped_column(Integer, default=0)
 
     custom_hours_before: Mapped[int] = mapped_column(Integer, default=2)
@@ -61,3 +59,21 @@ class HomeworkDone(Base):
     homework_id: Mapped[int] = mapped_column(ForeignKey("homeworks.id"))
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
     done_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class LessonSlot(Base):
+    __tablename__ = "lesson_slots"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(BigInteger)
+    datetime_start: Mapped[datetime] = mapped_column(DateTime)
+    is_booked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class HomeworkSubmission(Base):
+    __tablename__ = "homework_submissions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    homework_id: Mapped[int] = mapped_column(ForeignKey("homeworks.id"))
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
+    media_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    media_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
