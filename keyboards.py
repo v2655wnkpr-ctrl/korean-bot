@@ -1,3 +1,4 @@
+import calendar
 from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
@@ -54,6 +55,9 @@ def main_menu_teacher():
         ],
         [
             InlineKeyboardButton(text="📚 Домашки", callback_data="menu:hw"),
+        ],
+        [
+            InlineKeyboardButton(text="📅 Календарь", callback_data="menu:calendar"),
         ],
         [
             InlineKeyboardButton(text="Найти", callback_data="menu:find", icon_custom_emoji_id=E_FIND),
@@ -227,3 +231,58 @@ def hw_reminder_keyboard(days: int, enabled: bool):
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=b)
+
+
+def calendar_keyboard(year: int, month: int, days_with_lessons: set):
+    kb = []
+    
+    month_name = {
+        1: "Январь", 2: "Февраль", 3: "Март",
+        4: "Апрель", 5: "Май", 6: "Июнь",
+        7: "Июль", 8: "Август", 9: "Сентябрь",
+        10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+    }[month]
+    
+    kb.append([
+        InlineKeyboardButton(text="Пн", callback_data="cal:ignore"),
+        InlineKeyboardButton(text="Вт", callback_data="cal:ignore"),
+        InlineKeyboardButton(text="Ср", callback_data="cal:ignore"),
+        InlineKeyboardButton(text="Чт", callback_data="cal:ignore"),
+        InlineKeyboardButton(text="Пт", callback_data="cal:ignore"),
+        InlineKeyboardButton(text="Сб", callback_data="cal:ignore"),
+        InlineKeyboardButton(text="Вс", callback_data="cal:ignore"),
+    ])
+    
+    cal = calendar.monthcalendar(year, month)
+    for week in cal:
+        row = []
+        for day in week:
+            if day == 0:
+                row.append(InlineKeyboardButton(text=" ", callback_data="cal:ignore"))
+            else:
+                mark = "•" if day in days_with_lessons else ""
+                btn_text = f"{day}{mark}"
+                cb = f"cal:day:{year}-{month:02d}-{day:02d}"
+                row.append(InlineKeyboardButton(text=btn_text, callback_data=cb))
+        kb.append(row)
+    
+    prev_m = month - 1
+    prev_y = year
+    if prev_m < 1:
+        prev_m = 12
+        prev_y -= 1
+        
+    next_m = month + 1
+    next_y = year
+    if next_m > 12:
+        next_m = 1
+        next_y += 1
+
+    kb.append([
+        InlineKeyboardButton(text="⬅️", callback_data=f"cal:init:{prev_y}:{prev_m}"),
+        InlineKeyboardButton(text=month_name, callback_data="cal:ignore"),
+        InlineKeyboardButton(text="➡️", callback_data=f"cal:init:{next_y}:{next_m}"),
+    ])
+    kb.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=kb)
