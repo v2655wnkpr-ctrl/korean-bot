@@ -17,6 +17,9 @@ class Student(Base):
     tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(100))
     username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    
+    # Смещение часового пояса (0 = МСК, +7 = Владивосток)
+    timezone_offset: Mapped[int] = mapped_column(Integer, default=0)
 
     custom_hours_before: Mapped[int] = mapped_column(Integer, default=2)
     paid_lessons: Mapped[int] = mapped_column(Integer, default=0)
