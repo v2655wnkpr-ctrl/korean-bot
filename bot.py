@@ -1053,7 +1053,119 @@ async def cb_stdel_confirm(callback: CallbackQuery):
 
 
 # ---------- Webhook ----------
+# ---------- КАЛЕНДАРЬ ----------
 
+@dp.callback_query(lambda c: c.data == "menu:calendar")
+async def cb_calendar(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    now = now_msk()
+    year, month = now.year, now.month
+    
+    async with async_session() as session:
+        q = select(Lesson).where(Lesson.datetime_start >= datetime(year, month, 1))
+        r = await session.execute(q)
+        lessons = r.scalars().all()
+    
+    days = {l.datetime_start.day for l in lessons if l.datetime_start.month == month}
+    kb = calendar_keyboard(year, month, days)
+    await callback.message.edit_text("📅 Твой календарь:", reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("cal:nav:"))
+async def cb_cal_nav(callback: CallbackQuery):
+    _, _, y, m = callback.data.split(":")
+    y, m = int(y), int(m)
+    if m < 1:
+        m = 12
+        y -= 1
+    elif m > 12:
+        m = 1
+        y += 1
+    callback.data = f"cal:init:{y}:{m}"
+    await cb_calendar_init(callback)
+
+@dp.callback_query(lambda c: c.data.startswith("cal:init:"))
+async def cb_calendar_init(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    _, _, y, m = callback.data.split(":")
+    y, m = int(y), int(m)
+    
+    async with async_session() as session:
+        q = select(Lesson).where(Lesson.datetime_start >= datetime(y, m, 1))
+        r = await session.execute(q)
+        lessons = r.scalars().all()
+    
+    days = {l.datetime_start.day for l in lessons if l.datetime_start.month == m}
+    kb = calendar_keyboard(y, m, days)
+    await callback.message.edit_text("📅 Твой календарь:", reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("cal:day:"))
+async def cb_cal_day(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    date_str = callback.data.split(":")[2]
+    y, m, d = map(int, date_str.split("-"))
+    dt_start = datetime(y, m, d, 0, 0)
+    dt_end = datetime(y, m, d, 23, 59)
+    
+    async with async_session() as session:
+        q = select(Lesson).where(
+            Lesson.datetime_start >= dt_start,
+            Lesson.datetime_start <= dt_end
+        ).order_by(Lesson.datetime_start)
+        r = await session.execute(q)
+        lessons = r.scalars().all()
+    
+    if not lessons:
+        await callback.message.edit_text(f"📅 {d}.{m:02d}.{y}\n\nЗанятий нет.", reply_markup=back_to_main("menu:calendar"))
+        await callback.answer()
+        return
+    
+    lines = [f"📅 {d}.{m:02d}.{y}\n"]
+    for l in lessons:
+        lines.append(f"• {l.datetime_start.strftime('%H:%M')} — {l.title}")
+    await callback.message.edit_text("\n".join(lines), reply_markup=back_to_main("menu:calendar"))
+    await callback.answer()
+    @dp.callback_query(lambda c: c.data == "menu:calendar")
+async def cb_calendar(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    now = now_msk()
+    year, month = now.year, now.month
+    
+    async with async_session() as session:
+        q = select(Lesson).where(Lesson.datetime_start >= datetime(year, month, 1))
+        r = await session.execute(q)
+        lessons = r.scalars().all()
+    
+    days = {l.datetime_start.day for l in lessons if l.datetime_start.month == month}
+    kb = calendar_keyboard(year, month, days)
+    await callback.message.edit_text("📅 Твой календарь:", reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("cal:init:"))
+async def cb_calendar_init(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    _, _, y, m = callback.data.split(":")
+    y, m = int(y), int(m)
+    
+    async with async_session() as session:
+        q = select(Lesson).where(Lesson.datetime_start >= datetime(y, m, 1))
+        r = await session.execute(q)
+        lessons = r.scalars().all()
+    
+    days = {l.datetime_start.day for l in lessons if l.datetime_start.month == m}
+    kb = calendar_keyboard(y, m, days)
+    await callback.message.edit_text("📅 Твой календарь:", reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data == "cal:ignore")
+async def cb_cal_ignore(callback: CallbackQuery):
+    await callback.answer()
 async def health(request):
     return web.Response(text="OK")
 
