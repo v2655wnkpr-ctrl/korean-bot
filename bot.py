@@ -28,11 +28,16 @@ from keyboards import (
     transfer_cancel_keyboard, lessons_action_keyboard, confirm_delete_keyboard,
     confirm_delete_student_keyboard, hw_menu_teacher, hw_reminder_keyboard,
     calendar_keyboard, timezone_offset_keyboard, TEACHER_LINK,
+    E_ADD, E_LIST, E_DELETE
 )
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 TEACHER_ID = 803167669
+
+if not BOT_TOKEN:
+    msg = "Не найден BOT_TOKEN"
+    raise ValueError(msg)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -237,7 +242,7 @@ async def cb_cal_day(callback: CallbackQuery):
     await callback.answer()
 
 
-# ---------- ДОМАШКИ ----------
+# ---------- ДЗ ДЛЯ ПРЕПОДАВАТЕЛЯ ----------
 
 @dp.callback_query(lambda c: c.data == "menu:hw")
 async def cb_hw_menu(callback: CallbackQuery):
@@ -306,6 +311,89 @@ async def hw_deadline(message: types.Message, state: FSMContext):
         await session.commit()
     await message.answer("✅ ДЗ создано!", reply_markup=main_menu_teacher())
     await state.clear()
+
+@dp.callback_query(lambda c: c.data == "hw:list_teacher")
+async def cb_hw_list_teacher(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    async with async_session() as session:
+        q = select(Homework).order_by(Homework.id.desc())
+        res = await session.execute(q)
+        hws = res.scalars().all()
+    if not hws:
+        await callback.message.edit_text("Пока нет созданных ДЗ.", reply_markup=hw_menu_teacher())
+        await callback.answer()
+        return
+    b = []
+    for hw in hws:
+        dt = hw.created_at.strftime("%d.%m")
+        b.append([InlineKeyboardButton(text=f"{dt} — {hw.title}", callback_data=f"hw:view_teacher:{hw.id}")])
+    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:hw")])
+    kb = InlineKeyboardMarkup(inline_keyboard=b)
+    await callback.message.edit_text("📚 Выбери ДЗ (для просмотра/удаления):", reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("hw:view_teacher:"))
+async def cb_hw_view_teacher(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    hw_id = int(callback.data.split(":")[2])
+    async with async_session() as session:
+        hw = await session.get(Homework, hw_id)
+    if not hw:
+        await callback.answer("Не найдено")
+        return
+    text = f"📚 {hw.title}\n\n{hw.text}"
+    if hw.deadline:
+        text += f"\n\n📅 Дедлайн: {hw.deadline.strftime('%d.%m.%Y')}"
+    if hw.media_type:
+        text += f"\n\n📎 Прикреплен материал ({hw.media_type})"
+    b = [
+        [InlineKeyboardButton(text="🗑 Удалить ДЗ", callback_data=f"hw:del_ask:{hw.id}", icon_custom_emoji_id=E_DELETE)],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="hw:list_teacher")],
+    ]
+    kb = InlineKeyboardMarkup(inline_keyboard=b)
+    await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("hw:del_ask:"))
+async def cb_hw_del_ask(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    hw_id = int(callback.data.split(":")[2])
+    async with async_session() as session:
+        hw = await session.get(Homework, hw_id)
+    if not hw:
+        await callback.answer("Не найдено")
+        return
+    text = f"Точно удалить ДЗ?\n\n{hw.title}"
+    b = [
+        [InlineKeyboardButton(text="🗑 Да, удалить", callback_data=f"hw:del:{hw.id}")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data=f"hw:view_teacher:{hw.id}")],
+    ]
+    kb = InlineKeyboardMarkup(inline_keyboard=b)
+    await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("hw:del:"))
+async def cb_hw_del(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    hw_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        hw = await session.get(Homework, hw_id)
+        if hw:
+            q_done = select(HomeworkDone).where(HomeworkDone.homework_id == hw_id)
+            r_done = await session.execute(q_done)
+            for d in r_done.scalars().all():
+                await session.delete(d)
+            await session.delete(hw)
+            await session.commit()
+    await callback.message.edit_text("✅ ДЗ удалено.", reply_markup=hw_menu_teacher())
+    await callback.answer()
+
+
+# ---------- ДЗ ДЛЯ УЧЕНИКА ----------
 
 @dp.callback_query(lambda c: c.data == "hw:list")
 async def cb_hw_list(callback: CallbackQuery):
@@ -447,9 +535,11 @@ async def cb_hwrem_days(callback: CallbackQuery):
     await callback.answer()
 
 
-# ---------- ДОБАВЛЕНИЕ ЗАНЯТИЯ И ОПЛАТА (ОСТАЛЬНОЕ) ----------
-# (Здесь идут функции add_lesson, set_paid, pay, find, reschedule, delete)
-# Они остаются без изменений. Если их нет в твоем файле, скажи, я скину их отдельно.
+# ---------- ОСТАЛЬНОЕ (ЗАНЯТИЯ, ОПЛАТА, ПОИСК, ПЕРЕНОС) ----------
+# (Код этих функций остался без изменений с прошлого раза. Если ты заменяешь файл целиком,
+# просто вставь сюда те блоки "ДОБАВЛЕНИЕ ЗАНЯТИЯ", "ОПЛАТА", "ПОИСК", "ПЕРЕНОС" и "УДАЛЕНИЕ УЧЕНИКА"
+# которые я давал ранее, либо скажи, и я пришлю их прямо сейчас).
+
 
 # ---------- WEBHOOK ----------
 async def health(request):
