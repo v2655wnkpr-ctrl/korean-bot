@@ -13,7 +13,10 @@ from dotenv import load_dotenv
 from sqlalchemy import select
 
 from database import init_db, async_session
-from models import Student, Lesson, Homework, HomeworkDone
+from models import (
+    Student, Lesson, Homework, HomeworkDone, 
+    LessonSlot, HomeworkSubmission
+)
 from scheduler import start_scheduler, now_msk
 from texts import (
     text_pay_after, text_pay_end, text_tariffs, text_help, hours_text,
@@ -28,6 +31,7 @@ from keyboards import (
     transfer_cancel_keyboard, lessons_action_keyboard, confirm_delete_keyboard,
     confirm_delete_student_keyboard, hw_menu_teacher, hw_reminder_keyboard,
     calendar_keyboard, timezone_offset_keyboard, TEACHER_LINK,
+    slots_menu_teacher, student_transfer_menu, hw_submission_keyboard,
     E_ADD, E_LIST, E_DELETE
 )
 
@@ -79,6 +83,12 @@ class AddHomework(StatesGroup):
 
 class SetTimezone(StatesGroup):
     choosing_tz = State()
+
+class AddSlot(StatesGroup):
+    dt = State()
+
+class SubmitHW(StatesGroup):
+    media = State()
 
 
 def is_teacher(uid: int) -> bool:
@@ -242,6 +252,51 @@ async def cb_cal_day(callback: CallbackQuery):
     await callback.answer()
 
 
+# ---------- СЛОТЫ ДЛЯ ПЕРЕНОСА ----------
+
+@dp.callback_query(lambda c: c.data == "menu:slots")
+async def cb_slots_menu(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    await callback.message.edit_text("📅 Управление слотами", reply_markup=slots_menu_teacher())
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data == "slot:add")
+async def cb_slot_add(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("Введи дату и время слота (ДД.ММ.ГГГГ ЧЧ:ММ):")
+    await state.set_state(AddSlot.dt)
+    await callback.answer()
+
+@dp.message(AddSlot.dt)
+async def process_slot_add(message: types.Message, state: FSMContext):
+    try:
+        dt = datetime.strptime(message.text.strip(), "%d.%m.%Y %H:%M")
+    except ValueError:
+        await message.answer("Формат: 15.10.2026 18:30")
+        return
+    async with async_session() as session:
+        slot = LessonSlot(teacher_id=TEACHER_ID, datetime_start=dt)
+        session.add(slot)
+        await session.commit()
+    await message.answer("✅ Слот добавлен!", reply_markup=main_menu_teacher())
+    await state.clear()
+
+@dp.callback_query(lambda c: c.data == "slot:list")
+async def cb_slot_list(callback: CallbackQuery):
+    async with async_session() as session:
+        q = select(LessonSlot).where(LessonSlot.teacher_id == TEACHER_ID, LessonSlot.is_booked == False).order_by(LessonSlot.datetime_start)
+        r = await session.execute(q)
+        slots = r.scalars().all()
+    if not slots:
+        await callback.message.edit_text("Нет свободных слотов.", reply_markup=slots_menu_teacher())
+        return
+    lines = ["📅 Свободные слоты:\n"]
+    for s in slots:
+        lines.append(f"• {s.datetime_start.strftime('%d.%m %H:%M')}")
+    await callback.message.edit_text("\n".join(lines), reply_markup=slots_menu_teacher())
+    await callback.answer()
+
+
 # ---------- ДЗ ДЛЯ ПРЕПОДАВАТЕЛЯ ----------
 
 @dp.callback_query(lambda c: c.data == "menu:hw")
@@ -387,6 +442,10 @@ async def cb_hw_del(callback: CallbackQuery):
             r_done = await session.execute(q_done)
             for d in r_done.scalars().all():
                 await session.delete(d)
+            q_sub = select(HomeworkSubmission).where(HomeworkSubmission.homework_id == hw_id)
+            r_sub = await session.execute(q_sub)
+            for s in r_sub.scalars().all():
+                await session.delete(s)
             await session.delete(hw)
             await session.commit()
     await callback.message.edit_text("✅ ДЗ удалено.", reply_markup=hw_menu_teacher())
@@ -433,13 +492,16 @@ async def cb_hw_view(callback: CallbackQuery):
     text = f"📚 {hw.title}\n\n{hw.text}"
     if hw.deadline:
         text += f"\n\n📅 Дедлайн: {hw.deadline.strftime('%d.%m.%Y')}"
-    b = []
-    if not done:
-        b.append([InlineKeyboardButton(text="✅ Я выполнил(а)", callback_data=f"hw:done:{hw.id}")])
-    else:
+    
+    kb = hw_submission_keyboard(hw.id)
+    
+    if done:
         text += "\n\n✅ Вы уже отметили это задание."
-    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="hw:list")])
-    kb = InlineKeyboardMarkup(inline_keyboard=b)
+        b = [[InlineKeyboardButton(text="⬅️ Назад", callback_data="hw:list")]]
+        kb = InlineKeyboardMarkup(inline_keyboard=b)
+    else:
+        text += "\n\nПрикрепи фото/видео и нажми «Выполнил»."
+
     try:
         if hw.media_type in ("photo", "video") and hw.chat_id:
             await bot.copy_message(
@@ -456,8 +518,38 @@ async def cb_hw_view(callback: CallbackQuery):
         await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("hw:done:"))
-async def cb_hw_done(callback: CallbackQuery):
+@dp.callback_query(lambda c: c.data.startswith("hw:attach:"))
+async def cb_hw_attach(callback: CallbackQuery, state: FSMContext):
+    hw_id = int(callback.data.split(":")[2])
+    await state.update_data(hw_id=hw_id)
+    await callback.message.edit_text("Отправь фото или видео:")
+    await state.set_state(SubmitHW.media)
+    await callback.answer()
+
+@dp.message(SubmitHW.media)
+async def process_hw_media(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    hw_id = data.get("hw_id")
+    uid = message.from_user.id
+    if not message.photo and not message.video:
+        await message.answer("Нужно фото или видео.")
+        return
+    m_type = "photo" if message.photo else "video"
+    m_id = message.photo[-1].file_id if message.photo else message.video.file_id
+    
+    async with async_session() as session:
+        q = select(Student).where(Student.tg_id == uid)
+        r = await session.execute(q)
+        st = r.scalar_one_or_none()
+        if st:
+            sub = HomeworkSubmission(homework_id=hw_id, student_id=st.id, media_type=m_type, media_id=m_id)
+            session.add(sub)
+            await session.commit()
+            await bot.send_message(TEACHER_ID, f"📚 {st.full_name} прикрепил файл к ДЗ")
+    await message.answer("✅ Файл прикреплен. Можешь нажать «Выполнил».")
+
+@dp.callback_query(lambda c: c.data.startswith("hw:finish:"))
+async def cb_hw_finish(callback: CallbackQuery):
     hw_id = int(callback.data.split(":")[2])
     uid = callback.from_user.id
     async with async_session() as session:
@@ -466,21 +558,14 @@ async def cb_hw_done(callback: CallbackQuery):
         st = r.scalar_one_or_none()
         hw = await session.get(Homework, hw_id)
         if st and hw:
-            q2 = select(HomeworkDone).where(
-                HomeworkDone.homework_id == hw_id,
-                HomeworkDone.student_id == st.id
-            )
+            q2 = select(HomeworkDone).where(HomeworkDone.homework_id == hw_id, HomeworkDone.student_id == st.id)
             r2 = await session.execute(q2)
             if not r2.scalar_one_or_none():
                 done = HomeworkDone(homework_id=hw_id, student_id=st.id)
                 session.add(done)
                 await session.commit()
-                txt = f"📚 {st.full_name} выполнил(а) ДЗ: {hw.title}"
-                await bot.send_message(TEACHER_ID, txt)
-    await callback.message.edit_text(
-        "✅ Отлично! Я передал преподавателю.",
-        reply_markup=back_to_main("hw:list")
-    )
+                await bot.send_message(TEACHER_ID, f"📚 {st.full_name} сдал ДЗ: {hw.title}")
+    await callback.message.edit_text("✅ Отлично! Я передал преподавателю.", reply_markup=back_to_main())
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "hw_rem_settings")
@@ -535,34 +620,22 @@ async def cb_hwrem_days(callback: CallbackQuery):
     await callback.answer()
 
 
-# ---------- ОСТАЛЬНОЕ (ЗАНЯТИЯ, ОПЛАТА, ПОИСК, ПЕРЕНОС) ----------
-# (Код этих функций остался без изменений с прошлого раза. Если ты заменяешь файл целиком,
-# просто вставь сюда те блоки "ДОБАВЛЕНИЕ ЗАНЯТИЯ", "ОПЛАТА", "ПОИСК", "ПЕРЕНОС" и "УДАЛЕНИЕ УЧЕНИКА"
-# которые я давал ранее, либо скажи, и я пришлю их прямо сейчас).
+# ---------- ПЕРЕНОС И ОСТАЛЬНОЕ ----------
 
+@dp.callback_query(lambda c: c.data == "transfer:click")
+async def cb_transfer_click(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("Как хочешь перенести?", reply_markup=student_transfer_menu())
+    await callback.answer()
 
-# ---------- WEBHOOK ----------
-async def health(request):
-    return web.Response(text="OK")
-
-async def on_startup(bot: Bot) -> None:
-    await init_db()
-    logging.info("БД готова")
-    await bot.set_webhook(
-        f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}",
-        secret_token=WEBHOOK_SECRET,
-        drop_pending_updates=True,
-    )
-    logging.info("Webhook ок")
-    start_scheduler(bot)
-
-app = web.Application()
-handler = SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET)
-handler.register(app, path=WEBHOOK_PATH)
-app.router.add_get("/health", health)
-setup_application(app, dp, bot=bot)
-dp.startup.register(on_startup)
-
-if __name__ == "__main__":
-    print("Сервер запущен")
-    web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
+@dp.callback_query(lambda c: c.data == "transfer:ask_slot")
+async def cb_transfer_ask_slot(callback: CallbackQuery):
+    async with async_session() as session:
+        q = select(LessonSlot).where(LessonSlot.is_booked == False).order_by(LessonSlot.datetime_start)
+        r = await session.execute(q)
+        slots = r.scalars().all()
+    if not slots:
+        await callback.message.edit_text("Свободных слотов нет. Уточни у преподавателя.", reply_markup=back_to_main())
+        return
+    b = []
+    for s in slots[:10]:
+        b.append([InlineKeyboardButton(text=s.datetime_start.strftime("%d.%m %H:%M"), callback_data=f"transfer:pick:{s.id}")
