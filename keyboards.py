@@ -4,19 +4,19 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 
-TEACHER_LINK = "https://t.me/v2655wnkpr"
+TEACHER_LINK = "https://t.me/daru_usha"
 
-E_LESSONS = "5343968081150486424"
-E_SETTINGS = "5343705388065763490"
-E_CONTACT = "5253967574038752898"
-E_HELP = "5344015111042378193"
-E_RESCHED = "5312111690240763536"
-E_DELETE = "5341285689390542260"
-E_LIST = "5343835843402411085"
-E_STATS = "5343846413316925467"
-E_SETPAID = "5343928112184831466"
-E_FIND = "5343803218830829094"
-E_STUDENTS = "5361658604766110429"
+E_LESSONS = "5262864719051504303"
+E_SETTINGS = "5373116439345511510"
+E_CONTACT = "5377707548931543502"
+E_HELP = "5373107772101508671"
+E_RESCHED = "5372908279460542562"
+E_DELETE = "5372819657105360167"
+E_LIST = "5372998306270035636"
+E_STATS = "5370941579575967992"
+E_SETPAID = "5373035595176098840"
+E_FIND = "5373227270976584536"
+E_STUDENTS = "5373120279046273354"
 
 
 def main_menu_student():
@@ -55,8 +55,6 @@ def main_menu_teacher():
         ],
         [
             InlineKeyboardButton(text="📚 Домашки", callback_data="menu:hw"),
-        ],
-        [
             InlineKeyboardButton(text="📅 Календарь", callback_data="menu:calendar"),
         ],
         [
@@ -235,7 +233,6 @@ def hw_reminder_keyboard(days: int, enabled: bool):
 
 def calendar_keyboard(year: int, month: int, days_with_lessons: set):
     kb = []
-    
     month_name = {
         1: "Январь", 2: "Февраль", 3: "Март",
         4: "Апрель", 5: "Май", 6: "Июнь",
