@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -7,11 +7,12 @@ from sqlalchemy import select
 
 from database import async_session
 from models import Student, Lesson, Homework, HomeworkDone
+from texts import text_hw_reminder_notify
 
 
 MSK = ZoneInfo("Europe/Moscow")
 TEACHER_ID = 803167669
-LESSON_LINK = "ССЫЛКА_НА_СОЗВОН"
+LESSON_LINK = "ССЫЛКА_НА_СОЗВОН" # <-- ЗАМЕНИ
 
 scheduler = AsyncIOScheduler()
 
@@ -20,15 +21,20 @@ def now_msk() -> datetime:
     return datetime.now(MSK).replace(tzinfo=None)
 
 
+def now_offset(offset_hours: int) -> datetime:
+    return now_msk() + timedelta(hours=offset_hours)
+
+
 async def check_lessons(bot):
-    now = now_msk()
     async with async_session() as session:
         q = select(Student)
         result = await session.execute(q)
         students = result.scalars().all()
 
         for student in students:
+            now = now_offset(student.timezone_offset)
             hours = student.custom_hours_before or 2
+            
             q2 = select(Lesson).where(Lesson.student_id == student.id)
             result2 = await session.execute(q2)
             lessons = result2.scalars().all()
@@ -37,6 +43,7 @@ async def check_lessons(bot):
                 diff = lesson.datetime_start - now
                 mins = diff.total_seconds() / 60
                 target = hours * 60
+                
                 if 0 <= target - mins <= 1:
                     await send_reminder(bot, student, lesson)
                 if 0 <= 30 - mins <= 1:
@@ -53,7 +60,7 @@ async def check_lessons(bot):
 async def check_paid(bot, student, session):
     left = student.paid_lessons
     if left == 1:
-        now = now_msk()
+        now = now_offset(student.timezone_offset)
         last = student.last_payment_reminder
         if last is None or (now - last).days >= 1:
             text = "💛 Осталось 1 занятие\n\nПора продлить абонемент 🤍"
@@ -91,7 +98,6 @@ async def check_teacher(bot):
 
 
 async def check_homework(bot):
-    now = now_msk()
     async with async_session() as session:
         q = select(Student)
         result = await session.execute(q)
@@ -101,6 +107,7 @@ async def check_homework(bot):
             if not student.hw_reminder_enabled:
                 continue
             
+            now = now_offset(student.timezone_offset)
             days = student.hw_reminder_days or 1
             
             q2 = select(Homework).where(Homework.deadline != None, Homework.deadline > now)
@@ -116,8 +123,10 @@ async def check_homework(bot):
                     continue
                 
                 diff = hw.deadline - now
-                if 0 <= (diff.total_seconds() / 86400) - days <= 0.01:
-                    text = f"📚 Напоминание о ДЗ!\n\nТема: {hw.title}\n\nНе забудь сдать до {hw.deadline.strftime('%d.%m %H:%M')}!"
+                days_left = diff.total_seconds() / 86400
+                
+                if 0 <= days - days_left <= 0.04:
+                    text = text_hw_reminder_notify(hw.title, hw.deadline.strftime('%d.%m.%Y'))
                     try:
                         await bot.send_message(student.tg_id, text)
                     except Exception as e:
@@ -171,6 +180,6 @@ async def send_link(bot, student, lesson):
 def start_scheduler(bot):
     scheduler.add_job(check_lessons, "interval", minutes=1, args=[bot])
     scheduler.add_job(check_teacher, "interval", minutes=1, args=[bot])
-    scheduler.add_job(check_homework, "interval", hours=1, args=[bot])
+    scheduler.add_job(check_homework, "interval", minutes=30, args=[bot])
     scheduler.start()
     logging.info("Планировщик запущен")
