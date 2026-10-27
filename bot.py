@@ -250,9 +250,7 @@ async def cb_cal_day(callback: CallbackQuery):
         lines.append(f"• {l.datetime_start.strftime('%H:%M')} — {l.title}")
     await callback.message.edit_text("\n".join(lines), reply_markup=back_to_main("menu:calendar"))
     await callback.answer()
-
-
-# ---------- СЛОТЫ ДЛЯ ПЕРЕНОСА ----------
+    # ---------- СЛОТЫ ДЛЯ ПЕРЕНОСА ----------
 
 @dp.callback_query(lambda c: c.data == "menu:slots")
 async def cb_slots_menu(callback: CallbackQuery):
@@ -638,4 +636,58 @@ async def cb_transfer_ask_slot(callback: CallbackQuery):
         return
     b = []
     for s in slots[:10]:
-        b.append([InlineKeyboardButton(text=s.datetime_start.strftime("%d.%m %H:%M"), callback_data=f"transfer:pick:{s.id}")
+        b.append([InlineKeyboardButton(text=s.datetime_start.strftime("%d.%m %H:%M"), callback_data=f"transfer:pick:{s.id}")])
+    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+    kb = InlineKeyboardMarkup(inline_keyboard=b)
+    await callback.message.edit_text("Выбери свободное время:", reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("transfer:pick:"))
+async def cb_transfer_pick(callback: CallbackQuery):
+    slot_id = int(callback.data.split(":")[2])
+    uid = callback.from_user.id
+    async with async_session() as session:
+        slot = await session.get(LessonSlot, slot_id)
+        q = select(Student).where(Student.tg_id == uid)
+        r = await session.execute(q)
+        st = r.scalar_one_or_none()
+        if not st or not slot:
+            return
+        now = now_msk()
+        q2 = select(Lesson).where(Lesson.student_id == st.id, Lesson.datetime_start >= now).order_by(Lesson.datetime_start)
+        r2 = await session.execute(q2)
+        lesson = r2.scalars().first()
+        les_info = lesson.datetime_start.strftime("%d.%m %H:%M") if lesson else "—"
+        text = f"🔄 Запрос на перенос\n\nУченик: {st.full_name}\nТекущее: {les_info}\nХочет: {slot.datetime_start.strftime('%d.%m %H:%M')}"
+        await bot.send_message(TEACHER_ID, text)
+        slot.is_booked = True
+        await session.commit()
+    await callback.message.edit_text("✅ Запрос отправлен преподавателю!", reply_markup=back_to_main())
+    await callback.answer()
+
+
+# ---------- WEBHOOK ----------
+async def health(request):
+    return web.Response(text="OK")
+
+async def on_startup(bot: Bot) -> None:
+    await init_db()
+    logging.info("БД готова")
+    await bot.set_webhook(
+        f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}",
+        secret_token=WEBHOOK_SECRET,
+        drop_pending_updates=True,
+    )
+    logging.info("Webhook ок")
+    start_scheduler(bot)
+
+app = web.Application()
+handler = SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET)
+handler.register(app, path=WEBHOOK_PATH)
+app.router.add_get("/health", health)
+setup_application(app, dp, bot=bot)
+dp.startup.register(on_startup)
+
+if __name__ == "__main__":
+    print("Сервер запущен")
+    web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
