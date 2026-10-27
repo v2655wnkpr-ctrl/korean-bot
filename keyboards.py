@@ -27,6 +27,7 @@ def main_menu_student():
         ],
         [
             InlineKeyboardButton(text="📚 Домашки", callback_data="hw:list"),
+            InlineKeyboardButton(text="⚙️ Настройки ДЗ", callback_data="hw_rem_settings"),
         ],
         [
             InlineKeyboardButton(text="Связаться", url=TEACHER_LINK, icon_custom_emoji_id=E_CONTACT),
@@ -38,9 +39,7 @@ def main_menu_student():
 
 def main_menu_teacher():
     b = [
-        [
-            InlineKeyboardButton(text="➕ Добавить занятие", callback_data="menu:add"),
-        ],
+        [InlineKeyboardButton(text="➕ Добавить занятие", callback_data="menu:add")],
         [
             InlineKeyboardButton(text="Перенести", callback_data="menu:reschedule", icon_custom_emoji_id=E_RESCHED),
             InlineKeyboardButton(text="Удалить", callback_data="menu:delete", icon_custom_emoji_id=E_DELETE),
@@ -65,6 +64,15 @@ def main_menu_teacher():
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
+def timezone_offset_keyboard():
+    b = [
+        [InlineKeyboardButton(text="Москва (0)", callback_data="tz:0")],
+        [InlineKeyboardButton(text="Владивосток (+7)", callback_data="tz:7")],
+        [InlineKeyboardButton(text="Другой город", callback_data="tz:other")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=b)
+
+
 def back_to_main(cb: str = "menu:main"):
     b = [[InlineKeyboardButton(text="⬅️ Назад", callback_data=cb)]]
     return InlineKeyboardMarkup(inline_keyboard=b)
@@ -72,20 +80,10 @@ def back_to_main(cb: str = "menu:main"):
 
 def hours_keyboard():
     b = [
-        [
-            InlineKeyboardButton(text="1 час", callback_data="h:1"),
-            InlineKeyboardButton(text="3 часа", callback_data="h:3"),
-        ],
-        [
-            InlineKeyboardButton(text="1 день", callback_data="h:24"),
-            InlineKeyboardButton(text="2 дня", callback_data="h:48"),
-        ],
-        [
-            InlineKeyboardButton(text="Неделя", callback_data="h:168"),
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main"),
-        ],
+        [InlineKeyboardButton(text="1 час", callback_data="h:1"), InlineKeyboardButton(text="3 часа", callback_data="h:3")],
+        [InlineKeyboardButton(text="1 день", callback_data="h:24"), InlineKeyboardButton(text="2 дня", callback_data="h:48")],
+        [InlineKeyboardButton(text="Неделя", callback_data="h:168")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=b)
 
@@ -115,12 +113,8 @@ def card_keyboard(student_id: int):
             InlineKeyboardButton(text="➕ Занятие", callback_data=f"act:add:{student_id}"),
             InlineKeyboardButton(text="💰 Оплата", callback_data=f"act:pay:{student_id}"),
         ],
-        [
-            InlineKeyboardButton(text="🗑 Удалить", callback_data=f"stdel:ask:{student_id}"),
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main"),
-        ],
+        [InlineKeyboardButton(text="🗑 Удалить", callback_data=f"stdel:ask:{student_id}")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=b)
 
@@ -138,25 +132,15 @@ def set_paid_students_keyboard(students):
 
 def set_paid_amounts_keyboard(sid: int, current: int = 0):
     b = [
-        [
-            InlineKeyboardButton(text="4 зан.", callback_data=f"spa:{sid}:4"),
-            InlineKeyboardButton(text="8 зан.", callback_data=f"spa:{sid}:8"),
-        ],
-        [
-            InlineKeyboardButton(text="12 зан.", callback_data=f"spa:{sid}:12"),
-            InlineKeyboardButton(text="16 зан.", callback_data=f"spa:{sid}:16"),
-        ],
+        [InlineKeyboardButton(text="4 зан.", callback_data=f"spa:{sid}:4"), InlineKeyboardButton(text="8 зан.", callback_data=f"spa:{sid}:8")],
+        [InlineKeyboardButton(text="12 зан.", callback_data=f"spa:{sid}:12"), InlineKeyboardButton(text="16 зан.", callback_data=f"spa:{sid}:16")],
         [
             InlineKeyboardButton(text="➖ -1", callback_data=f"spa:{sid}:{current - 1}"),
             InlineKeyboardButton(text=f"Сейчас: {current}", callback_data="ignore"),
             InlineKeyboardButton(text="➕ +1", callback_data=f"spa:{sid}:{current + 1}"),
         ],
-        [
-            InlineKeyboardButton(text="❌ Обнулить", callback_data=f"spa:{sid}:0"),
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="sp:open"),
-        ],
+        [InlineKeyboardButton(text="❌ Обнулить", callback_data=f"spa:{sid}:0")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="sp:open")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=b)
 
@@ -234,19 +218,14 @@ def hw_reminder_keyboard(days: int, enabled: bool):
 def calendar_keyboard(year: int, month: int, days_with_lessons: set):
     kb = []
     month_name = {
-        1: "Январь", 2: "Февраль", 3: "Март",
-        4: "Апрель", 5: "Май", 6: "Июнь",
-        7: "Июль", 8: "Август", 9: "Сентябрь",
-        10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель", 5: "Май", 6: "Июнь",
+        7: "Июль", 8: "Август", 9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
     }[month]
     
     kb.append([
-        InlineKeyboardButton(text="Пн", callback_data="cal:ignore"),
-        InlineKeyboardButton(text="Вт", callback_data="cal:ignore"),
-        InlineKeyboardButton(text="Ср", callback_data="cal:ignore"),
-        InlineKeyboardButton(text="Чт", callback_data="cal:ignore"),
-        InlineKeyboardButton(text="Пт", callback_data="cal:ignore"),
-        InlineKeyboardButton(text="Сб", callback_data="cal:ignore"),
+        InlineKeyboardButton(text="Пн", callback_data="cal:ignore"), InlineKeyboardButton(text="Вт", callback_data="cal:ignore"),
+        InlineKeyboardButton(text="Ср", callback_data="cal:ignore"), InlineKeyboardButton(text="Чт", callback_data="cal:ignore"),
+        InlineKeyboardButton(text="Пт", callback_data="cal:ignore"), InlineKeyboardButton(text="Сб", callback_data="cal:ignore"),
         InlineKeyboardButton(text="Вс", callback_data="cal:ignore"),
     ])
     
@@ -263,17 +242,10 @@ def calendar_keyboard(year: int, month: int, days_with_lessons: set):
                 row.append(InlineKeyboardButton(text=btn_text, callback_data=cb))
         kb.append(row)
     
-    prev_m = month - 1
-    prev_y = year
-    if prev_m < 1:
-        prev_m = 12
-        prev_y -= 1
-        
-    next_m = month + 1
-    next_y = year
-    if next_m > 12:
-        next_m = 1
-        next_y += 1
+    prev_m = month - 1 if month > 1 else 12
+    prev_y = year if month > 1 else year - 1
+    next_m = month + 1 if month < 12 else 1
+    next_y = year if month < 12 else year + 1
 
     kb.append([
         InlineKeyboardButton(text="⬅️", callback_data=f"cal:init:{prev_y}:{prev_m}"),
