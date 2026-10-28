@@ -24,12 +24,11 @@ E_CALENDAR = "5372998306270035636"
 E_FIND = "5373099637433450704"
 E_STUDENTS = "5373116439345511510"
 
-# Новые эмодзи для слотов и ДЗ
-E_SLOTS = "5372998306270035636" # Книга
-E_SLOT_ADD = "5373227270976584536" # Карандаш
-E_HW_SUBMIT = "5377707548931543502" # Самолетик (отправить)
-E_HW_DONE = "5370664330847075805" # Галочка (выполнено)
-E_TRANSFER = "5372908279460542562" # Стрелка
+E_SLOTS = "5372998306270035636"
+E_SLOT_ADD = "5373227270976584536"
+E_HW_SUBMIT = "5377707548931543502"
+E_HW_DONE = "5370664330847075805"
+E_TRANSFER = "5372908279460542562"
 
 
 def main_menu_student():
@@ -80,6 +79,26 @@ def main_menu_teacher():
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
+def time_picker_keyboard():
+    hours = [
+        "07:00", "08:00", "09:00", "10:00",
+        "11:00", "12:00", "13:00", "14:00",
+        "15:00", "16:00", "17:00", "18:00",
+        "19:00", "20:00", "21:00", "22:00"
+    ]
+    b = []
+    row = []
+    for h in hours:
+        row.append(InlineKeyboardButton(text=h, callback_data=f"time:{h}"))
+        if len(row) == 4:
+            b.append(row)
+            row = []
+    if row:
+        b.append(row)
+    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=b)
+
+
 def timezone_offset_keyboard():
     b = [
         [InlineKeyboardButton(text="Москва (0)", callback_data="tz:0")],
@@ -95,6 +114,16 @@ def slots_menu_teacher():
         [InlineKeyboardButton(text="Мои слоты", callback_data="slot:list", icon_custom_emoji_id=E_LIST)],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")],
     ]
+    return InlineKeyboardMarkup(inline_keyboard=b)
+
+
+def slots_picker_keyboard(slots, sid: int):
+    b = []
+    for s in slots[:10]:
+        btn_text = s.datetime_start.strftime("%d.%m %H:%M")
+        b.append([InlineKeyboardButton(text=btn_text, callback_data=f"act_slot:{sid}:{s.id}")])
+    b.append([InlineKeyboardButton(text="Ввести дату вручную", callback_data=f"act_manual:{sid}")])
+    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
@@ -259,7 +288,7 @@ def hw_reminder_keyboard(days: int, enabled: bool):
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
-def calendar_keyboard(year: int, month: int, days_with_lessons: set):
+def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_days: set = None):
     kb = []
     month_name = {
         1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель", 5: "Май", 6: "Июнь",
@@ -273,6 +302,9 @@ def calendar_keyboard(year: int, month: int, days_with_lessons: set):
         InlineKeyboardButton(text="Вс", callback_data="cal:ignore"),
     ])
     
+    if free_slots_days is None:
+        free_slots_days = set()
+        
     cal = calendar.monthcalendar(year, month)
     for week in cal:
         row = []
@@ -280,7 +312,12 @@ def calendar_keyboard(year: int, month: int, days_with_lessons: set):
             if day == 0:
                 row.append(InlineKeyboardButton(text=" ", callback_data="cal:ignore"))
             else:
-                mark = "•" if day in days_with_lessons else ""
+                mark = ""
+                if day in days_with_lessons:
+                    mark += "•"
+                if day in free_slots_days:
+                    mark += "🟢"
+                
                 btn_text = f"{day}{mark}"
                 cb = f"cal:day:{year}-{month:02d}-{day:02d}"
                 row.append(InlineKeyboardButton(text=btn_text, callback_data=cb))
