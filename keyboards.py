@@ -79,7 +79,10 @@ def main_menu_teacher():
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
-def time_picker_keyboard():
+def time_picker_keyboard(selected_times=None):
+    if selected_times is None:
+        selected_times = set()
+        
     hours = [
         "07:00", "08:00", "09:00", "10:00",
         "11:00", "12:00", "13:00", "14:00",
@@ -89,12 +92,15 @@ def time_picker_keyboard():
     b = []
     row = []
     for h in hours:
-        row.append(InlineKeyboardButton(text=h, callback_data=f"time:{h}"))
+        mark = "✅" if h in selected_times else ""
+        row.append(InlineKeyboardButton(text=f"{mark}{h}", callback_data=f"time:{h}"))
         if len(row) == 4:
             b.append(row)
             row = []
     if row:
         b.append(row)
+        
+    b.append([InlineKeyboardButton(text="💾 Сохранить выбранные", callback_data="time:save")])
     b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=b)
 
