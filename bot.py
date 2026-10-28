@@ -1153,7 +1153,117 @@ async def resch_apply(message: types.Message, state: FSMContext):
             await session.commit()
     await message.answer("✅ Перенесено!", reply_markup=main_menu_teacher())
     await state.clear()
+# ---------- СТАТИСТИКА И ОПЛАТА ----------
 
+@dp.callback_query(lambda c: c.data == "menu:stats")
+async def cb_stats(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    async with async_session() as session:
+        q = select(Student)
+        res = await session.execute(q)
+        students = res.scalars().all()
+        
+        q2 = select(Lesson)
+        res2 = await session.execute(q2)
+        lessons = res2.scalars().all()
+        
+    now = now_msk()
+    done = len([l for l in lessons if l.datetime_start < now])
+    fut = len([l for l in lessons if l.datetime_start >= now])
+    
+    lines = [
+        "📊 Статистика:\n",
+        f"Учеников: {len(students)}",
+        f"Всего занятий: {len(lessons)}",
+        f"Проведено: {done}",
+        f"Предстоит: {fut}",
+    ]
+    await callback.message.edit_text("\n".join(lines), reply_markup=back_to_main())
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data in ("pay:after", "pay:end"))
+async def cb_pay_choose(callback: CallbackQuery, state: FSMContext):
+    uid = callback.from_user.id
+    if not is_teacher(uid):
+        return
+    mode = callback.data.split(":")[1]
+    async with async_session() as session:
+        q = select(Student).where(Student.tg_id != TEACHER_ID)
+        r = await session.execute(q)
+        students = r.scalars().all()
+        
+    if not students:
+        await callback.message.edit_text("Нет учеников.", reply_markup=back_to_main("menu:pay"))
+        await callback.answer()
+        return
+        
+    lines = ["👥 Кому:\n"]
+    for i, s in enumerate(students, 1):
+        un = s.username or "—"
+        lines.append(f"{i}. {s.full_name} @{un}")
+    lines.append(f"\nНомер 1–{len(students)} или @username:")
+    
+    data = {"mode": mode, "total": len(students)}
+    for i, s in enumerate(students, 1):
+        data[f"st_{i}"] = s.tg_id
+        
+    await state.update_data(**data)
+    await state.set_state(PayFlow.choosing_student)
+    await callback.message.edit_text("\n".join(lines), reply_markup=back_to_main("menu:pay"))
+    await callback.answer()
+
+
+@dp.message(PayFlow.choosing_student)
+async def pay_send(message: types.Message, state: FSMContext):
+    if not is_teacher(message.from_user.id):
+        return
+    data = await state.get_data()
+    total = data.get("total", 0)
+    mode = data.get("mode")
+    txt = message.text.strip()
+    tg = None
+    
+    if txt.isdigit():
+        num = int(txt)
+        if 1 <= num <= total:
+            tg = data.get(f"st_{num}")
+            
+    if tg is None:
+        low = txt.lower().lstrip("@")
+        async with async_session() as session:
+            q = select(Student)
+            r = await session.execute(q)
+            all_s = r.scalars().all()
+        for s in all_s:
+            if s.tg_id == TEACHER_ID:
+                continue
+            un = (s.username or "").lower()
+            nm = s.full_name.lower()
+            if low == un or low in nm:
+                tg = s.tg_id
+                break
+                
+    if tg is None:
+        await message.answer("Не нашёл.")
+        return
+        
+    if mode == "after":
+        text = text_pay_after_button()
+    else:
+        text = text_pay_end_button()
+        
+    kb = paid_button_keyboard()
+    try:
+        await bot.send_message(tg, text, reply_markup=kb)
+    except Exception as e:
+        await message.answer(f"Ошибка: {e}")
+        await state.clear()
+        return
+        
+    await state.clear()
+    await message.answer("✅ Отправлено.", reply_markup=back_to_main("menu:pay"))
 
 # ---------- WEBHOOK ----------
 async def health(request):
