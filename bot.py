@@ -187,7 +187,7 @@ async def cmd_menu(message: types.Message):
     else:
         kb = main_menu_student()
     await message.answer("Главное меню:", reply_markup=kb)
-    # ---------- КАЛЕНДАРЬ (Со слотами) ----------
+# ---------- КАЛЕНДАРЬ (Со слотами) ----------
 
 @dp.callback_query(lambda c: c.data == "menu:calendar")
 async def cb_calendar(callback: CallbackQuery):
@@ -298,8 +298,51 @@ async def process_slot_date(message: types.Message, state: FSMContext):
         await message.answer("Формат: 15.10.2026")
         return
         
-    await state.update_data(date_str=dt.strftime("%Y-%m-%d"))
-    await message.answer("Выбери время для слота:", reply_markup=time_picker_keyboard())
+    await state.update_data(date_str=dt.strftime("%Y-%m-%d"), selected_times=[])
+    await message.answer("Выбери время для слота (можно несколько):", reply_markup=time_picker_keyboard())
+
+@dp.callback_query(lambda c: c.data.startswith("time:"))
+async def cb_time_pick(callback: CallbackQuery, state: FSMContext):
+    time_str = callback.data.split(":")[1]
+    data = await state.get_data()
+    date_str = data.get("date_str")
+    
+    if not date_str:
+        await callback.message.edit_text("❌ Ошибка: дата не найдена. Попробуй заново.")
+        await state.clear()
+        await callback.answer()
+        return
+
+    if time_str == "save":
+        selected = data.get("selected_times", [])
+        if not selected:
+            await callback.answer("Ты не выбрал ни одного времени!")
+            return
+            
+        async with async_session() as session:
+            for t in selected:
+                dt = datetime.strptime(f"{date_str} {t}", "%Y-%m-%d %H:%M")
+                slot = LessonSlot(teacher_id=TEACHER_ID, datetime_start=dt)
+                session.add(slot)
+            await session.commit()
+            
+        await callback.message.edit_text(f"✅ Открыто слотов: {len(selected)}", reply_markup=main_menu_teacher())
+        await state.clear()
+        await callback.answer()
+        return
+
+    selected = data.get("selected_times", [])
+    if time_str in selected:
+        selected.remove(time_str)
+    else:
+        selected.append(time_str)
+        
+    await state.update_data(selected_times=selected)
+    
+    await callback.message.edit_reply_markup(
+        reply_markup=time_picker_keyboard(set(selected))
+    )
+    await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "slot:list")
 async def cb_slot_list(callback: CallbackQuery):
@@ -314,22 +357,6 @@ async def cb_slot_list(callback: CallbackQuery):
     for s in slots:
         lines.append(f"• {s.datetime_start.strftime('%d.%m %H:%M')}")
     await callback.message.edit_text("\n".join(lines), reply_markup=slots_menu_teacher())
-    await callback.answer()
-
-@dp.callback_query(lambda c: c.data.startswith("time:"))
-async def cb_time_pick(callback: CallbackQuery, state: FSMContext):
-    time_str = callback.data.split(":")[1]
-    data = await state.get_data()
-    date_str = data.get("date_str")
-    
-    if date_str:
-        dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
-        async with async_session() as session:
-            slot = LessonSlot(teacher_id=TEACHER_ID, datetime_start=dt)
-            session.add(slot)
-            await session.commit()
-        await callback.message.edit_text("✅ Слот добавлен!", reply_markup=main_menu_teacher())
-        await state.clear()
     await callback.answer()
 
 
@@ -482,7 +509,7 @@ async def add_title(message: types.Message, state: FSMContext):
     text = f"✅ Занятие добавлено!\n\nУченик: {data['sname']}\nДата: {dt.strftime('%d.%m.%Y %H:%M')}\nНазвание: {title}"
     await message.answer(text, reply_markup=main_menu_teacher())
     await state.clear()
-    # ---------- ДЗ ДЛЯ ПРЕПОДАВАТЕЛЯ ----------
+# ---------- ДЗ ДЛЯ ПРЕПОДАВАТЕЛЯ ----------
 
 @dp.callback_query(lambda c: c.data == "menu:hw")
 async def cb_hw_menu(callback: CallbackQuery):
