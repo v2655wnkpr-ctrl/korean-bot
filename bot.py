@@ -32,7 +32,7 @@ from keyboards import (
     confirm_delete_student_keyboard, hw_menu_teacher, hw_reminder_keyboard,
     calendar_keyboard, timezone_offset_keyboard, TEACHER_LINK,
     slots_menu_teacher, student_transfer_menu, hw_submission_keyboard,
-    E_ADD, E_LIST, E_DELETE
+    time_picker_keyboard, slots_picker_keyboard, E_ADD, E_LIST, E_DELETE
 )
 
 load_dotenv()
@@ -60,6 +60,12 @@ class AddLesson(StatesGroup):
     dt = State()
     title = State()
 
+class AddSlot(StatesGroup):
+    dt = State()
+
+class SetTimezone(StatesGroup):
+    choosing_tz = State()
+
 class PayFlow(StatesGroup):
     choosing_student = State()
 
@@ -81,15 +87,8 @@ class AddHomework(StatesGroup):
     media = State()
     deadline = State()
 
-class SetTimezone(StatesGroup):
-    choosing_tz = State()
-
-class AddSlot(StatesGroup):
-    dt = State()
-
 class SubmitHW(StatesGroup):
     media = State()
-
 
 def is_teacher(uid: int) -> bool:
     return uid == TEACHER_ID
@@ -139,7 +138,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 async def cb_set_tz(callback: CallbackQuery, state: FSMContext):
     tz_val = callback.data.split(":")[1]
     if tz_val == "other":
-        await callback.message.edit_text("Напиши, на сколько часов твое время отличается от Москвы (например, 7 для Владивостока, -1 для Калининграда):")
+        await callback.message.edit_text("Напиши, на сколько часов твое время отличается от Москвы:")
         return
     
     offset = int(tz_val)
@@ -157,13 +156,12 @@ async def cb_set_tz(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(text_welcome(), reply_markup=main_menu_student())
     await state.clear()
 
-
 @dp.message(SetTimezone.choosing_tz)
 async def set_tz_text(message: types.Message, state: FSMContext):
     try:
         offset = int(message.text.strip())
     except ValueError:
-        await message.answer("Пожалуйста, напиши просто число (например, 7 или -1):")
+        await message.answer("Пожалуйста, напиши просто число:")
         return
         
     uid = message.from_user.id
@@ -190,7 +188,7 @@ async def cmd_menu(message: types.Message):
     await message.answer("Главное меню:", reply_markup=kb)
 
 
-# ---------- КАЛЕНДАРЬ ----------
+# ---------- КАЛЕНДАРЬ (Со слотами) ----------
 
 @dp.callback_query(lambda c: c.data == "menu:calendar")
 async def cb_calendar(callback: CallbackQuery):
@@ -202,9 +200,16 @@ async def cb_calendar(callback: CallbackQuery):
         q = select(Lesson).where(Lesson.datetime_start >= datetime(year, month, 1))
         r = await session.execute(q)
         lessons = r.scalars().all()
-    days = {l.datetime_start.day for l in lessons if l.datetime_start.month == month}
-    kb = calendar_keyboard(year, month, days)
-    await callback.message.edit_text("📅 Твой календарь:", reply_markup=kb)
+        
+        q_slots = select(LessonSlot).where(LessonSlot.is_booked == False)
+        r_slots = await session.execute(q_slots)
+        slots = r_slots.scalars().all()
+        
+    days_lessons = {l.datetime_start.day for l in lessons if l.datetime_start.month == month}
+    days_slots = {s.datetime_start.day for s in slots if s.datetime_start.month == month}
+    
+    kb = calendar_keyboard(year, month, days_lessons, days_slots)
+    await callback.message.edit_text("📅 Твой календарь (🟢 = есть слоты):", reply_markup=kb)
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data.startswith("cal:init:"))
@@ -217,9 +222,16 @@ async def cb_calendar_init(callback: CallbackQuery):
         q = select(Lesson).where(Lesson.datetime_start >= datetime(y, m, 1))
         r = await session.execute(q)
         lessons = r.scalars().all()
-    days = {l.datetime_start.day for l in lessons if l.datetime_start.month == m}
-    kb = calendar_keyboard(y, m, days)
-    await callback.message.edit_text("📅 Твой календарь:", reply_markup=kb)
+        
+        q_slots = select(LessonSlot).where(LessonSlot.is_booked == False)
+        r_slots = await session.execute(q_slots)
+        slots = r_slots.scalars().all()
+        
+    days_lessons = {l.datetime_start.day for l in lessons if l.datetime_start.month == m}
+    days_slots = {s.datetime_start.day for s in slots if s.datetime_start.month == m}
+    
+    kb = calendar_keyboard(y, m, days_lessons, days_slots)
+    await callback.message.edit_text("📅 Твой календарь (🟢 = есть слоты):", reply_markup=kb)
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "cal:ignore")
@@ -234,23 +246,37 @@ async def cb_cal_day(callback: CallbackQuery):
     y, m, d = map(int, date_str.split("-"))
     dt_start = datetime(y, m, d, 0, 0)
     dt_end = datetime(y, m, d, 23, 59)
+    
     async with async_session() as session:
-        q = select(Lesson).where(
-            Lesson.datetime_start >= dt_start,
-            Lesson.datetime_start <= dt_end
-        ).order_by(Lesson.datetime_start)
+        q = select(Lesson).where(Lesson.datetime_start >= dt_start, Lesson.datetime_start <= dt_end).order_by(Lesson.datetime_start)
         r = await session.execute(q)
         lessons = r.scalars().all()
-    if not lessons:
-        await callback.message.edit_text(f"📅 {d}.{m:02d}.{y}\n\nЗанятий нет.", reply_markup=back_to_main("menu:calendar"))
-        await callback.answer()
-        return
+        
+        q_slots = select(LessonSlot).where(LessonSlot.datetime_start >= dt_start, LessonSlot.datetime_start <= dt_end, LessonSlot.is_booked == False).order_by(LessonSlot.datetime_start)
+        r_slots = await session.execute(q_slots)
+        slots = r_slots.scalars().all()
+
     lines = [f"📅 {d}.{m:02d}.{y}\n"]
-    for l in lessons:
-        lines.append(f"• {l.datetime_start.strftime('%H:%M')} — {l.title}")
+    
+    if lessons:
+        lines.append("Занятия:")
+        for l in lessons:
+            lines.append(f"• {l.datetime_start.strftime('%H:%M')} — {l.title}")
+        lines.append("")
+        
+    if slots:
+        lines.append("Свободные слоты:")
+        for s in slots:
+            lines.append(f"🟢 {s.datetime_start.strftime('%H:%M')}")
+            
+    if not lessons and not slots:
+        lines.append("Занятий и слотов нет.")
+
     await callback.message.edit_text("\n".join(lines), reply_markup=back_to_main("menu:calendar"))
     await callback.answer()
-    # ---------- СЛОТЫ ДЛЯ ПЕРЕНОСА ----------
+
+
+# ---------- СЛОТЫ ДЛЯ ПЕРЕНОСА ----------
 
 @dp.callback_query(lambda c: c.data == "menu:slots")
 async def cb_slots_menu(callback: CallbackQuery):
@@ -261,23 +287,20 @@ async def cb_slots_menu(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "slot:add")
 async def cb_slot_add(callback: CallbackQuery, state: FSMContext):
-    await callback.message.edit_text("Введи дату и время слота (ДД.ММ.ГГГГ ЧЧ:ММ):")
+    await callback.message.edit_text("Введи дату слота (ДД.ММ.ГГГГ):")
     await state.set_state(AddSlot.dt)
     await callback.answer()
 
 @dp.message(AddSlot.dt)
-async def process_slot_add(message: types.Message, state: FSMContext):
+async def process_slot_date(message: types.Message, state: FSMContext):
     try:
-        dt = datetime.strptime(message.text.strip(), "%d.%m.%Y %H:%M")
+        dt = datetime.strptime(message.text.strip(), "%d.%m.%Y")
     except ValueError:
-        await message.answer("Формат: 15.10.2026 18:30")
+        await message.answer("Формат: 15.10.2026")
         return
-    async with async_session() as session:
-        slot = LessonSlot(teacher_id=TEACHER_ID, datetime_start=dt)
-        session.add(slot)
-        await session.commit()
-    await message.answer("✅ Слот добавлен!", reply_markup=main_menu_teacher())
-    await state.clear()
+        
+    await state.update_data(date_str=dt.strftime("%Y-%m-%d"))
+    await message.answer("Выбери время для слота:", reply_markup=time_picker_keyboard())
 
 @dp.callback_query(lambda c: c.data == "slot:list")
 async def cb_slot_list(callback: CallbackQuery):
@@ -663,6 +686,128 @@ async def cb_transfer_pick(callback: CallbackQuery):
         slot.is_booked = True
         await session.commit()
     await callback.message.edit_text("✅ Запрос отправлен преподавателю!", reply_markup=back_to_main())
+    await callback.answer()
+
+
+# ---------- ДОБАВЛЕНИЕ ЗАНЯТИЯ ЧЕРЕЗ СЛОТ ----------
+
+@dp.callback_query(lambda c: c.data.startswith("act:add:"))
+async def cb_card_add(callback: CallbackQuery, state: FSMContext):
+    uid = callback.from_user.id
+    if not is_teacher(uid):
+        await callback.answer("Нет доступа")
+        return
+    
+    sid = int(callback.data.split(":")[2])
+    
+    async with async_session() as session:
+        q = select(LessonSlot).where(LessonSlot.is_booked == False).order_by(LessonSlot.datetime_start)
+        r = await session.execute(q)
+        slots = r.scalars().all()
+
+    if slots:
+        kb = slots_picker_keyboard(slots, sid)
+        await callback.message.edit_text("Выбери свободный слот или введи дату вручную:", reply_markup=kb)
+        await callback.answer()
+        return
+    
+    async with async_session() as session:
+        student = await session.get(Student, sid)
+    await state.update_data(sid=sid, sname=student.full_name)
+    
+    await callback.message.edit_text("Нет свободных слотов. Введи дату и время (ДД.ММ.ГГГГ ЧЧ:ММ):")
+    await state.set_state(AddLesson.dt)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("act_slot:"))
+async def cb_act_slot(callback: CallbackQuery, state: FSMContext):
+    _, sid_str, slot_id_str = callback.data.split(":")
+    sid = int(sid_str)
+    slot_id = int(slot_id_str)
+    
+    async with async_session() as session:
+        slot = await session.get(LessonSlot, slot_id)
+        student = await session.get(Student, sid)
+        if not slot or not student:
+            await callback.answer("Ошибка")
+            return
+            
+        slot.is_booked = True
+        await session.commit()
+        
+        await state.update_data(
+            sid=student.id, 
+            sname=student.full_name, 
+            dt=slot.datetime_start, 
+            slot_id=slot.id
+        )
+        
+    await callback.message.edit_text("Введи название занятия (или «-»):")
+    await state.set_state(AddLesson.title)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("act_manual:"))
+async def cb_act_manual(callback: CallbackQuery, state: FSMContext):
+    sid = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        student = await session.get(Student, sid)
+        if not student:
+            await callback.answer("Ошибка")
+            return
+        await state.update_data(sid=student.id, sname=student.full_name)
+        
+    await callback.message.edit_text("Введи дату и время (ДД.ММ.ГГГГ ЧЧ:ММ):")
+    await state.set_state(AddLesson.dt)
+    await callback.answer()
+
+@dp.message(AddLesson.dt)
+async def add_dt(message: types.Message, state: FSMContext):
+    try:
+        dt = datetime.strptime(message.text.strip(), "%d.%m.%Y %H:%M")
+    except ValueError:
+        await message.answer("Формат: 15.10.2026 18:30")
+        return
+    await state.update_data(dt=dt)
+    await message.answer("Название (или «-» = Корейский):")
+    await state.set_state(AddLesson.title)
+
+@dp.message(AddLesson.title)
+async def add_title(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    title = message.text.strip()
+    if title == "-":
+        title = "Корейский"
+        
+    async with async_session() as session:
+        lesson = Lesson(
+            student_id=data["sid"], 
+            datetime_start=data["dt"], 
+            title=title
+        )
+        session.add(lesson)
+        await session.commit()
+        
+    dt = data["dt"]
+    text = f"✅ Занятие добавлено!\n\nУченик: {data['sname']}\nДата: {dt.strftime('%d.%m.%Y %H:%M')}\nНазвание: {title}"
+    await message.answer(text, reply_markup=main_menu_teacher())
+    await state.clear()
+
+# ---------- ВЫБОР ВРЕМЕНИ ПРИ СОЗДАНИИ СЛОТА ----------
+
+@dp.callback_query(lambda c: c.data.startswith("time:"))
+async def cb_time_pick(callback: CallbackQuery, state: FSMContext):
+    time_str = callback.data.split(":")[1]
+    data = await state.get_data()
+    date_str = data.get("date_str")
+    
+    if date_str:
+        dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+        async with async_session() as session:
+            slot = LessonSlot(teacher_id=TEACHER_ID, datetime_start=dt)
+            session.add(slot)
+            await session.commit()
+        await callback.message.edit_text("✅ Слот добавлен!", reply_markup=main_menu_teacher())
+        await state.clear()
     await callback.answer()
 
 
