@@ -285,7 +285,7 @@ def hw_reminder_keyboard(days: int, enabled: bool):
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
-def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_days: set = None):
+def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_days: set = None, prefix: str = "cal"):
     kb = []
     month_name = {
         1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель", 5: "Май", 6: "Июнь",
@@ -316,7 +316,7 @@ def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_
                     mark += "🟢"
                 
                 btn_text = f"{day}{mark}"
-                cb = f"cal:day:{year}-{month:02d}-{day:02d}"
+                cb = f"{prefix}:day:{year}-{month:02d}-{day:02d}"
                 row.append(InlineKeyboardButton(text=btn_text, callback_data=cb))
         kb.append(row)
     
@@ -326,11 +326,10 @@ def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_
     next_y = year if month < 12 else year + 1
 
     kb.append([
-        InlineKeyboardButton(text="⬅️", callback_data=f"cal:init:{prev_y}:{prev_m}"),
+        InlineKeyboardButton(text="⬅️", callback_data=f"{prefix}:init:{prev_y}:{prev_m}"),
         InlineKeyboardButton(text=month_name, callback_data="cal:ignore"),
-        InlineKeyboardButton(text="➡️", callback_data=f"cal:init:{next_y}:{next_m}"),
+        InlineKeyboardButton(text="➡️", callback_data=f"{prefix}:init:{next_y}:{next_m}"),
     ])
     kb.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
     
-    return InlineKeyboardMarkup(inline_keyboard=kb)
-    
+    return InlineKeyboardMarkup(inline_keyboard=kb) 
