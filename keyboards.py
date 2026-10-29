@@ -6,7 +6,6 @@ from aiogram.types import (
 
 TEACHER_LINK = "https://t.me/daru_usha"
 
-# Твои премиум-эмодзи
 E_LESSONS = "5372998306270035636"
 E_SETTINGS = "5373035595176098840"
 E_HW = "5373116439345511510"
@@ -82,13 +81,7 @@ def main_menu_teacher():
 def time_picker_keyboard(selected_times=None):
     if selected_times is None:
         selected_times = set()
-        
-    hours = [
-        "07:00", "08:00", "09:00", "10:00",
-        "11:00", "12:00", "13:00", "14:00",
-        "15:00", "16:00", "17:00", "18:00",
-        "19:00", "20:00", "21:00", "22:00"
-    ]
+    hours = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"]
     b = []
     row = []
     for h in hours:
@@ -99,7 +92,6 @@ def time_picker_keyboard(selected_times=None):
             row = []
     if row:
         b.append(row)
-        
     b.append([InlineKeyboardButton(text="💾 Сохранить выбранные", callback_data="time:save")])
     b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=b)
@@ -116,7 +108,6 @@ def timezone_offset_keyboard():
 
 def slots_menu_teacher():
     b = [
-        [InlineKeyboardButton(text="Открыть слот", callback_data="slot:add", icon_custom_emoji_id=E_SLOT_ADD)],
         [InlineKeyboardButton(text="Мои слоты", callback_data="slot:list", icon_custom_emoji_id=E_LIST)],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")],
     ]
