@@ -77,3 +77,4 @@ class HomeworkSubmission(Base):
     media_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     media_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    
