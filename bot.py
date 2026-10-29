@@ -341,7 +341,7 @@ async def cb_time_pick(callback: CallbackQuery, state: FSMContext):
     date_str = data.get("date_str")
     
     if not date_str:
-        await callback.message.edit_text("❌ Ошибка: дата не найдена. Попробуй заново.")
+        await callback.message.edit_text("❌ Ошибка: дата не найдена. Начни заново.")
         await state.clear()
         await callback.answer()
         return
@@ -920,7 +920,7 @@ async def cb_transfer_pick(callback: CallbackQuery):
     await callback.answer()
 
 
-# ---------- ОПЛАТА И ПОИСК (УПРОЩЕННО) ----------
+# ---------- ОПЛАТА ----------
 
 @dp.callback_query(lambda c: c.data == "menu:pay")
 async def cb_pay(callback: CallbackQuery):
@@ -999,6 +999,7 @@ async def pay_send(message: types.Message, state: FSMContext):
         return
     await state.clear()
     await message.answer("✅ Отправлено.", reply_markup=back_to_main("menu:pay"))
+
 
 @dp.callback_query(lambda c: c.data == "sp:open")
 async def cb_sp_open(callback: CallbackQuery):
