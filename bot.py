@@ -292,14 +292,14 @@ async def cb_slots_menu(callback: CallbackQuery):
         slots = r.scalars().all()
     days_slots = {s.datetime_start.day for s in slots if s.datetime_start.month == month}
     
-    kb = calendar_keyboard(year, month, set(), days_slots)
+    kb = calendar_keyboard(year, month, set(), days_slots, prefix="slot")
     await callback.message.edit_text(
         "📅 Выбери день, чтобы открыть слоты:\n(🟢 — уже есть свободные)", 
         reply_markup=kb
     )
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("cal:day:"))
+@dp.callback_query(lambda c: c.data.startswith("slot:day:"))
 async def cb_slot_day(callback: CallbackQuery, state: FSMContext):
     date_str = callback.data.split(":")[2]
     y, m, d = map(int, date_str.split("-"))
@@ -310,6 +310,27 @@ async def cb_slot_day(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         f"📅 {d}.{m:02d}.{y}\n\nВыбери время (можно несколько):", 
         reply_markup=time_picker_keyboard()
+    )
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("slot:init:"))
+async def cb_slot_init(callback: CallbackQuery):
+    if not is_teacher(callback.from_user.id):
+        return
+    _, _, y, m = callback.data.split(":")
+    y, m = int(y), int(m)
+    
+    async with async_session() as session:
+        q = select(LessonSlot).where(LessonSlot.is_booked == False)
+        r = await session.execute(q)
+        slots = r.scalars().all()
+        
+    days_slots = {s.datetime_start.day for s in slots if s.datetime_start.month == m}
+    
+    kb = calendar_keyboard(y, m, set(), days_slots, prefix="slot")
+    await callback.message.edit_text(
+        "📅 Выбери день, чтобы открыть слоты:\n(🟢 — уже есть свободные)", 
+        reply_markup=kb
     )
     await callback.answer()
 
@@ -851,31 +872,55 @@ async def cb_hwrem_days(callback: CallbackQuery):
     await callback.answer()
 
 
-# ---------- ОСТАЛЬНОЕ (ПЕРЕНОС, ОПЛАТА, ПОИСК, СТАТИСТИКА) ----------
+# ---------- ПЕРЕНОС И ОСТАЛЬНОЕ ----------
 
-@dp.callback_query(lambda c: c.data == "menu:stats")
-async def cb_stats(callback: CallbackQuery):
-    if not is_teacher(callback.from_user.id):
-        return
-    async with async_session() as session:
-        q = select(Student)
-        res = await session.execute(q)
-        students = res.scalars().all()
-        q2 = select(Lesson)
-        res2 = await session.execute(q2)
-        lessons = res2.scalars().all()
-    now = now_msk()
-    done = len([l for l in lessons if l.datetime_start < now])
-    fut = len([l for l in lessons if l.datetime_start >= now])
-    lines = [
-        "📊 Статистика:\n",
-        f"Учеников: {len(students)}",
-        f"Всего занятий: {len(lessons)}",
-        f"Проведено: {done}",
-        f"Предстоит: {fut}",
-    ]
-    await callback.message.edit_text("\n".join(lines), reply_markup=back_to_main())
+@dp.callback_query(lambda c: c.data == "transfer:click")
+async def cb_transfer_click(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("Как хочешь перенести?", reply_markup=student_transfer_menu())
     await callback.answer()
+
+@dp.callback_query(lambda c: c.data == "transfer:ask_slot")
+async def cb_transfer_ask_slot(callback: CallbackQuery):
+    async with async_session() as session:
+        q = select(LessonSlot).where(LessonSlot.is_booked == False).order_by(LessonSlot.datetime_start)
+        r = await session.execute(q)
+        slots = r.scalars().all()
+    if not slots:
+        await callback.message.edit_text("Свободных слотов нет. Уточни у преподавателя.", reply_markup=back_to_main())
+        return
+    b = []
+    for s in slots[:10]:
+        b.append([InlineKeyboardButton(text=s.datetime_start.strftime("%d.%m %H:%M"), callback_data=f"transfer:pick:{s.id}")])
+    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+    kb = InlineKeyboardMarkup(inline_keyboard=b)
+    await callback.message.edit_text("Выбери свободное время:", reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("transfer:pick:"))
+async def cb_transfer_pick(callback: CallbackQuery):
+    slot_id = int(callback.data.split(":")[2])
+    uid = callback.from_user.id
+    async with async_session() as session:
+        slot = await session.get(LessonSlot, slot_id)
+        q = select(Student).where(Student.tg_id == uid)
+        r = await session.execute(q)
+        st = r.scalar_one_or_none()
+        if not st or not slot:
+            return
+        now = now_msk()
+        q2 = select(Lesson).where(Lesson.student_id == st.id, Lesson.datetime_start >= now).order_by(Lesson.datetime_start)
+        r2 = await session.execute(q2)
+        lesson = r2.scalars().first()
+        les_info = lesson.datetime_start.strftime("%d.%m %H:%M") if lesson else "—"
+        text = f"🔄 Запрос на перенос\n\nУченик: {st.full_name}\nТекущее: {les_info}\nХочет: {slot.datetime_start.strftime('%d.%m %H:%M')}"
+        await bot.send_message(TEACHER_ID, text)
+        slot.is_booked = True
+        await session.commit()
+    await callback.message.edit_text("✅ Запрос отправлен преподавателю!", reply_markup=back_to_main())
+    await callback.answer()
+
+
+# ---------- ОПЛАТА И ПОИСК (УПРОЩЕННО) ----------
 
 @dp.callback_query(lambda c: c.data == "menu:pay")
 async def cb_pay(callback: CallbackQuery):
@@ -884,7 +929,7 @@ async def cb_pay(callback: CallbackQuery):
     await callback.message.edit_text("💰 Оплата и напоминания\n\nЧто отправить?", reply_markup=pay_menu())
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data in ("pay:after", "pay:end"))
+@dp.callback_query(lambda c: c.data.startswith("pay:"))
 async def cb_pay_choose(callback: CallbackQuery, state: FSMContext):
     uid = callback.from_user.id
     if not is_teacher(uid):
