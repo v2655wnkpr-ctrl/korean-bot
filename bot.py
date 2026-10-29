@@ -43,7 +43,7 @@ if not BOT_TOKEN:
     msg = "Не найден BOT_TOKEN"
     raise ValueError(msg)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 BASE_WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL", "https://localhost")
 WEBHOOK_PATH = "/webhook"
