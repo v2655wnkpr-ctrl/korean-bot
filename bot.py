@@ -45,7 +45,6 @@ if not BOT_TOKEN:
 
 logging.basicConfig(level=logging.INFO)
 
-# Берем URL из вебхука, убираем слэш на конце, если он есть
 BASE_WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://localhost").rstrip("/")
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "my-secret-token"
@@ -61,9 +60,6 @@ class AddLesson(StatesGroup):
     dt = State()
     title = State()
 
-class AddSlot(StatesGroup):
-    dt = State()
-
 class SetTimezone(StatesGroup):
     choosing_tz = State()
 
@@ -75,12 +71,6 @@ class FindStudent(StatesGroup):
 
 class RescheduleFlow(StatesGroup):
     dt = State()
-
-class PaymentProof(StatesGroup):
-    waiting_photo = State()
-
-class TransferFlow(StatesGroup):
-    reason = State()
 
 class AddHomework(StatesGroup):
     title = State()
@@ -340,7 +330,6 @@ async def cb_slot_init(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data.startswith("time:"))
 async def cb_time_pick(callback: CallbackQuery, state: FSMContext):
-    # ИСПРАВЛЕНИЕ: разбиваем только по первому двоеточию
     time_str = callback.data.split(":", 1)[1]
     
     data = await state.get_data()
