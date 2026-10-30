@@ -34,7 +34,7 @@ from keyboards import (
     slots_menu_teacher, student_transfer_menu, hw_submission_keyboard,
     time_picker_keyboard, slots_picker_keyboard, slots_delete_keyboard,
     student_lesson_reminders_keyboard, subscription_payment_keyboard, 
-    E_ADD, E_LIST, E_DELETE
+    E_ADD, E_LIST, E_DELETE, E_BACK, E_RESCHED
 )
 
 load_dotenv()
@@ -92,8 +92,7 @@ def is_teacher(uid: int) -> bool:
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
-    await state.clear() # Сбрасываем состояние, если застрял
-    
+    await state.clear()
     user = message.from_user
     uid = user.id
     is_new = False
@@ -130,9 +129,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         kb = main_menu_student()
 
     await message.answer(text, reply_markup=kb)
-
-
-@dp.callback_query(lambda c: c.data.startswith("tz:"), SetTimezone.choosing_tz)
+    @dp.callback_query(lambda c: c.data.startswith("tz:"), SetTimezone.choosing_tz)
 async def cb_set_tz(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     tz_val = callback.data.split(":")[1]
@@ -256,9 +253,7 @@ async def cb_cal_day(callback: CallbackQuery):
     if not lessons and not slots:
         lines.append("Занятий и слотов нет.")
     await callback.message.edit_text("\n".join(lines), reply_markup=back_to_main("menu:calendar"))
-
-
-# ---------- СЛОТЫ ----------
+    # ---------- СЛОТЫ ----------
 @dp.callback_query(lambda c: c.data == "menu:slots")
 async def cb_slots_menu(callback: CallbackQuery):
     await callback.answer()
@@ -359,9 +354,7 @@ async def cb_slot_del(callback: CallbackQuery):
             await session.commit()
             await callback.message.answer(f"✅ Слот на {slot.datetime_start.strftime('%d.%m %H:%M')} закрыт.")
     await cb_slot_list(callback)
-
-
-# ---------- СТАТИСТИКА / ДОБАВЛЕНИЕ ЗАНЯТИЙ ----------
+    # ---------- СТАТИСТИКА / ДОБАВЛЕНИЕ ЗАНЯТИЙ ----------
 @dp.callback_query(lambda c: c.data == "menu:stats")
 async def cb_stats(callback: CallbackQuery):
     await callback.answer()
@@ -494,8 +487,7 @@ async def add_title(message: types.Message, state: FSMContext):
     text = f"✅ Занятие добавлено!\n\nУченик: {data['sname']}\nДата: {dt.strftime('%d.%m.%Y %H:%M')}\nНазвание: {title}"
     await message.answer(text, reply_markup=main_menu_teacher())
     await state.clear()
-
-# ---------- ДЗ ----------
+    # ---------- ДЗ ПРЕПОДАВАТЕЛЯ ----------
 @dp.callback_query(lambda c: c.data == "menu:hw")
 async def cb_hw_menu(callback: CallbackQuery):
     await callback.answer()
@@ -622,7 +614,7 @@ async def cb_hw_del(callback: CallbackQuery):
             await session.delete(hw)
             await session.commit()
     await callback.message.edit_text("✅ ДЗ удалено.", reply_markup=hw_menu_teacher())
-
+    # ---------- ДЗ И НАСТРОЙКИ УЧЕНИКА ----------
 @dp.callback_query(lambda c: c.data == "hw:list")
 async def cb_hw_list(callback: CallbackQuery):
     await callback.answer()
@@ -738,7 +730,6 @@ async def cb_hwrem_toggle(callback: CallbackQuery):
             await session.commit()
     await cb_hw_rem_settings(callback)
 
-
 @dp.callback_query(lambda c: c.data == "menu:lessons")
 async def cb_student_lessons(callback: CallbackQuery):
     await callback.answer()
@@ -796,7 +787,6 @@ async def cb_lrem_hours(callback: CallbackQuery):
             await session.commit()
     await callback.answer(f"Будем напоминать за {hours} ч. до урока", show_alert=True)
     await cb_settings_menu(callback)
-
 
 @dp.callback_query(lambda c: c.data == "transfer:click")
 async def cb_transfer_click(callback: CallbackQuery, state: FSMContext):
@@ -875,9 +865,7 @@ async def cb_transfer_decline(callback: CallbackQuery):
             slot.is_booked = False
             await session.commit()
     await callback.message.edit_text("❌ Вы отклонили перенос. Слот снова свободен.")
-
-
-# ---------- ОПЛАТА ----------
+    # ---------- ОПЛАТА И АБОНЕМЕНТЫ ----------
 @dp.callback_query(lambda c: c.data == "menu:pay")
 async def cb_pay(callback: CallbackQuery):
     await callback.answer()
@@ -951,7 +939,6 @@ async def pay_send(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("✅ Отправлено.", reply_markup=back_to_main("menu:pay"))
 
-
 @dp.callback_query(lambda c: c.data == "paid:send_screenshot")
 async def cb_paid_screenshot(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -973,6 +960,12 @@ async def process_payment_proof(message: types.Message, state: FSMContext):
 
     await message.answer("✅ Скриншот отправлен преподавателю! Ожидайте подтверждения.", reply_markup=back_to_main())
     await state.clear()
+
+@dp.callback_query(lambda c: c.data == "show:tariffs")
+async def cb_show_tariffs(callback: CallbackQuery):
+    await callback.answer()
+    txt = text_tariffs()
+    await callback.message.edit_text(txt, reply_markup=back_to_main())
 
 @dp.callback_query(lambda c: c.data == "sp:open")
 async def cb_sp_open(callback: CallbackQuery):
@@ -1027,6 +1020,7 @@ async def cb_paid_click(callback: CallbackQuery):
         if st:
             await bot.send_message(TEACHER_ID, f"💰 Ученик {st.full_name} (@{st.username}) нажал 'Я оплатил(а)'!")
 
+# ---------- ОСТАЛЬНЫЕ МЕНЮ ----------
 @dp.callback_query(lambda c: c.data == "ignore")
 async def cb_ignore(callback: CallbackQuery):
     await callback.answer()
@@ -1198,7 +1192,7 @@ async def resch_apply(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-# ---------- WEBHOOK ----------
+# ---------- WEBHOOK И ЗАПУСК ----------
 async def health(request):
     return web.Response(text="OK")
 
@@ -1234,4 +1228,3 @@ dp.startup.register(on_startup)
 if __name__ == "__main__":
     print("СЕРВЕР aiohttp ЗАПУЩЕН")
     web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
-
