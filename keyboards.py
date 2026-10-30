@@ -333,4 +333,12 @@ def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_
     kb.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
     
     return InlineKeyboardMarkup(inline_keyboard=kb)
-    
+
+
+def slots_delete_keyboard(slots):
+    b = []
+    for s in slots[:20]: # Ограничиваем 20 слотами
+        btn_text = f"❌ {s.datetime_start.strftime('%d.%m %H:%M')}"
+        b.append([InlineKeyboardButton(text=btn_text, callback_data=f"slot:del:{s.id}")])
+    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:slots")])
+    return InlineKeyboardMarkup(inline_keyboard=b)
