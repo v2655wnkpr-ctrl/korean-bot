@@ -45,7 +45,7 @@ if not BOT_TOKEN:
 
 logging.basicConfig(level=logging.INFO)
 
-BASE_WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL", "https://localhost")
+BASE_WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://localhost")
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "my-secret-token"
 WEB_SERVER_HOST = "0.0.0.0"
@@ -137,7 +137,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 @dp.callback_query(lambda c: c.data.startswith("tz:"), SetTimezone.choosing_tz)
 async def cb_set_tz(callback: CallbackQuery, state: FSMContext):
-    await callback.answer() # <-- Перенесено наверх
+    await callback.answer()
     
     tz_val = callback.data.split(":")[1]
     if tz_val == "other":
@@ -242,7 +242,7 @@ async def cb_cal_ignore(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data.startswith("cal:day:"))
 async def cb_cal_day(callback: CallbackQuery):
-    await callback.answer() # <-- Перенесено наверх
+    await callback.answer()
     
     if not is_teacher(callback.from_user.id):
         return
@@ -303,7 +303,7 @@ async def cb_slots_menu(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data.startswith("slot:day:"))
 async def cb_slot_day(callback: CallbackQuery, state: FSMContext):
-    await callback.answer() # <-- Перенесено наверх
+    await callback.answer()
     
     date_str = callback.data.split(":")[2]
     y, m, d = map(int, date_str.split("-"))
@@ -339,9 +339,11 @@ async def cb_slot_init(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data.startswith("time:"))
 async def cb_time_pick(callback: CallbackQuery, state: FSMContext):
-    await callback.answer() # <-- Перенесено наверх
+    await callback.answer()
     
-    time_str = callback.data.split(":")[1]
+    # ИСПРАВЛЕНО: Берем всё после первого двоеточия, чтобы сохранить время в формате "10:00"
+    time_str = callback.data.split(":", 1)[1]
+    
     data = await state.get_data()
     date_str = data.get("date_str")
     
@@ -1247,7 +1249,6 @@ async def on_startup(bot: Bot) -> None:
     await init_db()
     logging.info("БД готова")
     
-    # ДОБАВЛЕН allowed_updates
     await bot.set_webhook(
         f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}",
         secret_token=WEBHOOK_SECRET,
