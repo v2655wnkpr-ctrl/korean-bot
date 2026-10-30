@@ -45,7 +45,8 @@ if not BOT_TOKEN:
 
 logging.basicConfig(level=logging.INFO)
 
-BASE_WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://localhost")
+# Берем URL из вебхука, убираем слэш на конце, если он есть
+BASE_WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://localhost").rstrip("/")
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "my-secret-token"
 WEB_SERVER_HOST = "0.0.0.0"
@@ -339,22 +340,21 @@ async def cb_slot_init(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data.startswith("time:"))
 async def cb_time_pick(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    
-    # ИСПРАВЛЕНО: Берем всё после первого двоеточия, чтобы сохранить время в формате "10:00"
+    # ИСПРАВЛЕНИЕ: разбиваем только по первому двоеточию
     time_str = callback.data.split(":", 1)[1]
     
     data = await state.get_data()
     date_str = data.get("date_str")
     
     if not date_str:
-        await callback.message.edit_text("❌ Ошибка: дата не найдена. Начни заново.")
+        await callback.answer("❌ Ошибка: дата не найдена. Начни заново.", show_alert=True)
         await state.clear()
         return
 
     if time_str == "save":
         selected = data.get("selected_times", [])
         if not selected:
+            await callback.answer("Ты не выбрал ни одного времени!", show_alert=True)
             return
             
         async with async_session() as session:
@@ -366,6 +366,7 @@ async def cb_time_pick(callback: CallbackQuery, state: FSMContext):
             
         await callback.message.edit_text(f"✅ Открыто слотов: {len(selected)}", reply_markup=main_menu_teacher())
         await state.clear()
+        await callback.answer()
         return
 
     selected = data.get("selected_times", [])
@@ -379,6 +380,7 @@ async def cb_time_pick(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_reply_markup(
         reply_markup=time_picker_keyboard(set(selected))
     )
+    await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "slot:list")
 async def cb_slot_list(callback: CallbackQuery):
@@ -1056,7 +1058,8 @@ async def cb_ignore(callback: CallbackQuery):
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu:main")
-async def cb_main(callback: CallbackQuery):
+async def cb_main(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     await callback.answer()
     uid = callback.from_user.id
     if is_teacher(uid):
@@ -1246,17 +1249,31 @@ async def health(request):
     return web.Response(text="OK")
 
 async def on_startup(bot: Bot) -> None:
-    await init_db()
-    logging.info("БД готова")
-    
-    await bot.set_webhook(
-        f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}",
-        secret_token=WEBHOOK_SECRET,
-        drop_pending_updates=True,
-        allowed_updates=["message", "callback_query"]
-    )
-    logging.info("Webhook ок")
-    start_scheduler(bot)
+    print("--- НАЧАЛО ЗАПУСКА БОТА ---")
+    try:
+        await init_db()
+        print("--- БАЗА ДАННЫХ УСПЕШНО ПОДКЛЮЧЕНА ---")
+    except Exception as e:
+        print(f"!!! ОШИБКА БАЗЫ ДАННЫХ: {e}")
+        
+    try:
+        url = f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}"
+        print(f"--- УСТАНАВЛИВАЮ ВЕБХУК НА: {url} ---")
+        await bot.set_webhook(
+            url,
+            secret_token=WEBHOOK_SECRET,
+            drop_pending_updates=True,
+            allowed_updates=["message", "callback_query"]
+        )
+        print("--- ВЕБХУК УСПЕШНО УСТАНОВЛЕН ---")
+    except Exception as e:
+        print(f"!!! ОШИБКА ВЕБХУКА: {e}")
+        
+    try:
+        start_scheduler(bot)
+        print("--- ПЛАНИРОВЩИК ЗАПУЩЕН ---")
+    except Exception as e:
+        print(f"!!! ОШИБКА ПЛАНИРОВЩИКА: {e}")
 
 app = web.Application()
 handler = SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET)
@@ -1266,5 +1283,5 @@ setup_application(app, dp, bot=bot)
 dp.startup.register(on_startup)
 
 if __name__ == "__main__":
-    print("Сервер запущен")
+    print("СЕРВЕР aiohttp ЗАПУЩЕН")
     web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
