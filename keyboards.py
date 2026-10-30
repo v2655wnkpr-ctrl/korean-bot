@@ -333,3 +333,4 @@ def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_
     kb.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
     
     return InlineKeyboardMarkup(inline_keyboard=kb)
+    
