@@ -7,20 +7,15 @@ class Student(Base):
     __tablename__ = "students"
 
     id = Column(Integer, primary_key=True, index=True)
-    # ИСПРАВЛЕНИЕ: Заменили Integer на BigInteger для Telegram ID
     tg_id = Column(BigInteger, unique=True, index=True)
     full_name = Column(String)
     username = Column(String, nullable=True)
     timezone_offset = Column(Integer, default=0)
     paid_lessons = Column(Integer, default=0)
     
-    # Настройки напоминаний о ДЗ (упрощенные)
     hw_reminder_enabled = Column(Boolean, default=True)
-    
-    # Настройки напоминаний об уроках
     lesson_reminder_hours = Column(Integer, default=2)
 
-    # Отношения
     lessons = relationship("Lesson", back_populates="student")
     hw_done = relationship("HomeworkDone", back_populates="student")
     hw_submissions = relationship("HomeworkSubmission", back_populates="student")
@@ -41,8 +36,6 @@ class LessonSlot(Base):
     __tablename__ = "lesson_slots"
 
     id = Column(Integer, primary_key=True, index=True)
-    # ID преподавателя тоже может быть длинным, лучше тоже использовать BigInteger, 
-    # если ты хранишь там Telegram ID.
     teacher_id = Column(BigInteger) 
     datetime_start = Column(DateTime)
     is_booked = Column(Boolean, default=False)
@@ -56,7 +49,7 @@ class Homework(Base):
     text = Column(String)
     media_type = Column(String, nullable=True)
     media_id = Column(String, nullable=True)
-    chat_id = Column(BigInteger, nullable=True) # ID чата тоже может быть длинным
+    chat_id = Column(BigInteger, nullable=True)
     deadline = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
