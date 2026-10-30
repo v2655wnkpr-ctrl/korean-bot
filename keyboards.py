@@ -274,12 +274,11 @@ def hw_menu_teacher():
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
-def hw_reminder_keyboard(days: int, enabled: bool):
-    btn_text = "Выключить" if enabled else "Включить"
-    btn_icon = E_DELETE if enabled else E_HW_DONE
+# УПРОЩЕННАЯ КЛАВИАТУРА НАПОМИНАНИЙ О ДЗ
+def hw_reminder_keyboard(enabled: bool):
+    btn_text = "🔕 Выключить напоминания" if enabled else "🔔 Включить напоминания"
     b = [
-        [InlineKeyboardButton(text=f"За {days} дн.", callback_data=f"hwrem:{days}")],
-        [InlineKeyboardButton(text=btn_text, callback_data="hwrem:toggle", icon_custom_emoji_id=btn_icon)],
+        [InlineKeyboardButton(text=btn_text, callback_data="hwrem:toggle")],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=b)
@@ -337,8 +336,24 @@ def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_
 
 def slots_delete_keyboard(slots):
     b = []
-    for s in slots[:20]: # Ограничиваем 20 слотами
+    for s in slots[:20]: 
         btn_text = f"❌ {s.datetime_start.strftime('%d.%m %H:%M')}"
         b.append([InlineKeyboardButton(text=btn_text, callback_data=f"slot:del:{s.id}")])
     b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:slots")])
+    return InlineKeyboardMarkup(inline_keyboard=b)
+
+
+def student_lesson_reminders_keyboard(current_hours: int):
+    b = [
+        [InlineKeyboardButton(text=f"Текущее: за {current_hours} ч.", callback_data="ignore")],
+        [
+            InlineKeyboardButton(text="За 1 час", callback_data="lrem:1"),
+            InlineKeyboardButton(text="За 2 часа", callback_data="lrem:2")
+        ],
+        [
+            InlineKeyboardButton(text="За 3 часа", callback_data="lrem:3"),
+            InlineKeyboardButton(text="За 24 часа", callback_data="lrem:24")
+        ],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")],
+    ]
     return InlineKeyboardMarkup(inline_keyboard=b)
