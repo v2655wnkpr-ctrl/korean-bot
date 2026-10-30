@@ -73,4 +73,4 @@ class HomeworkSubmission(Base):
     media_type = Column(String)
     media_id = Column(String)
 
-    student = relationship("Student", back_populates="hw_submissions")
+    student = relationship("Student", back_populates="hw_submissions") 
