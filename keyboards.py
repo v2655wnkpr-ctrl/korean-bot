@@ -61,7 +61,7 @@ def main_menu_teacher():
         ],
         [
             InlineKeyboardButton(text="Оплата", callback_data="menu:pay", icon_custom_emoji_id=E_PAY),
-            InlineKeyboardButton(text="set_paid", callback_data="sp:open", icon_custom_emoji_id=E_SETPAID),
+            InlineKeyboardButton(text="Добавить абонемент", callback_data="sp:open", icon_custom_emoji_id=E_SETPAID),
         ],
         [
             InlineKeyboardButton(text="Домашки", callback_data="menu:hw", icon_custom_emoji_id=E_HW),
@@ -93,7 +93,7 @@ def time_picker_keyboard(selected_times=None):
     if row:
         b.append(row)
     b.append([InlineKeyboardButton(text="💾 Сохранить выбранные", callback_data="time:save")])
-    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:slots")])
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
@@ -106,9 +106,11 @@ def timezone_offset_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
+# ОБНОВЛЕННОЕ МЕНЮ СЛОТОВ
 def slots_menu_teacher():
     b = [
-        [InlineKeyboardButton(text="Мои слоты", callback_data="slot:list", icon_custom_emoji_id=E_LIST)],
+        [InlineKeyboardButton(text="➕ Открыть слоты (Календарь)", callback_data="slot:show_calendar", icon_custom_emoji_id=E_ADD)],
+        [InlineKeyboardButton(text="📋 Мои открытые слоты", callback_data="slot:list", icon_custom_emoji_id=E_LIST)],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=b)
@@ -274,7 +276,6 @@ def hw_menu_teacher():
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 
-# УПРОЩЕННАЯ КЛАВИАТУРА НАПОМИНАНИЙ О ДЗ
 def hw_reminder_keyboard(enabled: bool):
     btn_text = "🔕 Выключить напоминания" if enabled else "🔔 Включить напоминания"
     b = [
@@ -329,7 +330,10 @@ def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_
         InlineKeyboardButton(text=month_name, callback_data="cal:ignore"),
         InlineKeyboardButton(text="➡️", callback_data=f"{prefix}:init:{next_y}:{next_m}"),
     ])
-    kb.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+    
+    # Если это календарь слотов, кнопка "Назад" ведет в меню слотов
+    back_cb = "menu:slots" if prefix == "slot" else "menu:main"
+    kb.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_cb)])
     
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
@@ -339,6 +343,7 @@ def slots_delete_keyboard(slots):
     for s in slots[:20]: 
         btn_text = f"❌ {s.datetime_start.strftime('%d.%m %H:%M')}"
         b.append([InlineKeyboardButton(text=btn_text, callback_data=f"slot:del:{s.id}")])
+    # Кнопка назад теперь ведет в общее меню слотов
     b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:slots")])
     return InlineKeyboardMarkup(inline_keyboard=b)
 
