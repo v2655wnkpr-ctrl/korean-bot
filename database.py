@@ -1,6 +1,4 @@
 import os
-import ssl
-
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
@@ -8,41 +6,28 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-
 def get_db_url() -> str:
     url = os.getenv("DATABASE_URL")
     if not url:
-        msg = "Нет DATABASE_URL"
-        raise ValueError(msg)
+        raise ValueError("Нет DATABASE_URL")
+    # Замена префикса для asyncpg
     if url.startswith("postgres://"):
-        url = url.replace(
-            "postgres://",
-            "postgresql+asyncpg://",
-            1,
-        )
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
     if url.startswith("postgresql://"):
-        url = url.replace(
-            "postgresql://",
-            "postgresql+asyncpg://",
-            1,
-        )
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     return url
 
-
 DATABASE_URL = get_db_url()
-
-# Настройка SSL для ZevCloud и других удаленных баз
-ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
 
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
+    # Для внутренней сети SSL не нужен, но добавляем таймауты для надежности
     connect_args={
-        "ssl": ssl_context,
-        "timeout": 30,  # Даем базе 30 секунд на ответ
+        "timeout": 60,
+        "command_timeout": 60,
     },
+    pool_pre_ping=True,
 )
 
 async_session = async_sessionmaker(
@@ -51,14 +36,10 @@ async_session = async_sessionmaker(
     expire_on_commit=False,
 )
 
-
 class Base(DeclarativeBase):
     pass
-
 
 async def init_db():
     from models import Student, Lesson
     async with engine.begin() as conn:
-        await conn.run_sync(
-            Base.metadata.create_all
-        )
+        await conn.run_sync(Base.metadata.create_all)
