@@ -33,7 +33,7 @@ from keyboards import (
     calendar_keyboard, timezone_offset_keyboard, TEACHER_LINK,
     slots_menu_teacher, student_transfer_menu, hw_submission_keyboard,
     time_picker_keyboard, slots_picker_keyboard, slots_delete_keyboard,
-    student_lesson_reminders_keyboard, subscription_payment_keyboard, # <-- ДОБАВЛЕНО
+    student_lesson_reminders_keyboard, subscription_payment_keyboard, 
     E_ADD, E_LIST, E_DELETE
 )
 
@@ -85,12 +85,15 @@ class SubmitHW(StatesGroup):
 class PaymentProof(StatesGroup):
     waiting_photo = State()
 
+
 def is_teacher(uid: int) -> bool:
     return uid == TEACHER_ID
 
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
+    await state.clear() # Сбрасываем состояние, если застрял
+    
     user = message.from_user
     uid = user.id
     is_new = False
@@ -566,7 +569,7 @@ async def cb_hw_list_teacher(callback: CallbackQuery):
     for hw in hws:
         dt = hw.created_at.strftime("%d.%m")
         b.append([InlineKeyboardButton(text=f"{dt} — {hw.title}", callback_data=f"hw:view_teacher:{hw.id}")])
-    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:hw")])
+    b.append([InlineKeyboardButton(text="Назад", callback_data="menu:hw", icon_custom_emoji_id=E_BACK)])
     kb = InlineKeyboardMarkup(inline_keyboard=b)
     await callback.message.edit_text("📚 Выбери ДЗ (для просмотра/удаления):", reply_markup=kb)
 
@@ -582,8 +585,8 @@ async def cb_hw_view_teacher(callback: CallbackQuery):
     if hw.deadline: text += f"\n\n📅 Дедлайн: {hw.deadline.strftime('%d.%m.%Y')}"
     if hw.media_type: text += f"\n\n📎 Прикреплен материал ({hw.media_type})"
     b = [
-        [InlineKeyboardButton(text="🗑 Удалить ДЗ", callback_data=f"hw:del_ask:{hw.id}", icon_custom_emoji_id=E_DELETE)],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="hw:list_teacher")],
+        [InlineKeyboardButton(text="Удалить ДЗ", callback_data=f"hw:del_ask:{hw.id}", icon_custom_emoji_id=E_DELETE)],
+        [InlineKeyboardButton(text="Назад", callback_data="hw:list_teacher", icon_custom_emoji_id=E_BACK)],
     ]
     kb = InlineKeyboardMarkup(inline_keyboard=b)
     await callback.message.edit_text(text, reply_markup=kb)
@@ -598,8 +601,8 @@ async def cb_hw_del_ask(callback: CallbackQuery):
     if not hw: return
     text = f"Точно удалить ДЗ?\n\n{hw.title}"
     b = [
-        [InlineKeyboardButton(text="🗑 Да, удалить", callback_data=f"hw:del:{hw.id}")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data=f"hw:view_teacher:{hw.id}")],
+        [InlineKeyboardButton(text="Да, удалить", callback_data=f"hw:del:{hw.id}")],
+        [InlineKeyboardButton(text="Отмена", callback_data=f"hw:view_teacher:{hw.id}")],
     ]
     kb = InlineKeyboardMarkup(inline_keyboard=b)
     await callback.message.edit_text(text, reply_markup=kb)
@@ -630,7 +633,7 @@ async def cb_hw_list(callback: CallbackQuery):
         await callback.message.edit_text("Пока нет ДЗ.", reply_markup=back_to_main())
         return
     b = [[InlineKeyboardButton(text=hw.title, callback_data=f"hw:view:{hw.id}")] for hw in hws]
-    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+    b.append([InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)])
     kb = InlineKeyboardMarkup(inline_keyboard=b)
     await callback.message.edit_text("📚 Выбери тему:", reply_markup=kb)
 
@@ -652,7 +655,7 @@ async def cb_hw_view(callback: CallbackQuery):
     kb = hw_submission_keyboard(hw.id)
     if done:
         text += "\n\n✅ Вы уже отметили это задание."
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data="hw:list")]])
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Назад", callback_data="hw:list", icon_custom_emoji_id=E_BACK)]])
     else:
         text += "\n\nПрикрепи фото/видео и нажми «Выполнил»."
     try:
@@ -764,8 +767,8 @@ async def cb_student_lessons(callback: CallbackQuery):
             lines.append(f"✓ {local_dt.strftime('%d.%m %H:%M')} — {l.title}")
     kb_buttons = []
     if upcoming:
-        kb_buttons.append([InlineKeyboardButton(text="🔄 Перенести занятие", callback_data="transfer:click", icon_custom_emoji_id=E_RESCHED)])
-    kb_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+        kb_buttons.append([InlineKeyboardButton(text="Перенести занятие", callback_data="transfer:click", icon_custom_emoji_id=E_RESCHED)])
+    kb_buttons.append([InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)])
     kb = InlineKeyboardMarkup(inline_keyboard=kb_buttons)
     await callback.message.edit_text("\n".join(lines), reply_markup=kb, parse_mode="HTML")
 
@@ -812,7 +815,7 @@ async def cb_transfer_ask_slot(callback: CallbackQuery):
     b = []
     for s in slots[:10]:
         b.append([InlineKeyboardButton(text=s.datetime_start.strftime("%d.%m %H:%M"), callback_data=f"transfer:pick:{s.id}")])
-    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+    b.append([InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)])
     kb = InlineKeyboardMarkup(inline_keyboard=b)
     await callback.message.edit_text("Выбери свободное время:", reply_markup=kb)
 
@@ -932,7 +935,6 @@ async def pay_send(message: types.Message, state: FSMContext):
         await message.answer("Не нашёл.")
         return
     
-    # ЛОГИКА ОТПРАВКИ В ЗАВИСИМОСТИ ОТ РЕЖИМА
     if mode == "after":
         text = text_pay_after_button()
         kb = paid_button_keyboard()
@@ -966,7 +968,6 @@ async def process_payment_proof(message: types.Message, state: FSMContext):
         r = await session.execute(select(Student).where(Student.tg_id == message.from_user.id))
         st = r.scalar_one_or_none()
         if st:
-            # Пересылаем чек тебе
             await bot.forward_message(chat_id=TEACHER_ID, from_chat_id=message.chat.id, message_id=message.message_id)
             await bot.send_message(TEACHER_ID, f"💰 Ученик {st.full_name} прислал(а) скриншот оплаты!")
 
@@ -1086,7 +1087,7 @@ async def cb_delete(callback: CallbackQuery):
     if not future:
         await callback.message.edit_text("Нет предстоящих занятий.", reply_markup=back_to_main())
         return
-    await callback.message.edit_text("🗑 Удалить занятие\n\nВыбери:", reply_markup=lessons_action_keyboard(future, "del"))
+    await callback.message.edit_text("Удалить занятие\n\nВыбери:", reply_markup=lessons_action_keyboard(future, "del"))
 
 @dp.callback_query(lambda c: c.data.startswith("del:"))
 async def cb_del_choose(callback: CallbackQuery):
@@ -1167,7 +1168,7 @@ async def cb_reschedule(callback: CallbackQuery):
     if not future:
         await callback.message.edit_text("Нет предстоящих занятий.", reply_markup=back_to_main())
         return
-    await callback.message.edit_text("🔄 Перенести занятие\n\nВыбери:", reply_markup=lessons_action_keyboard(future, "resch"))
+    await callback.message.edit_text("Перенести занятие\n\nВыбери:", reply_markup=lessons_action_keyboard(future, "resch"))
 
 @dp.callback_query(lambda c: c.data.startswith("resch:"))
 async def cb_resch_choose(callback: CallbackQuery, state: FSMContext):
@@ -1233,3 +1234,4 @@ dp.startup.register(on_startup)
 if __name__ == "__main__":
     print("СЕРВЕР aiohttp ЗАПУЩЕН")
     web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
+
