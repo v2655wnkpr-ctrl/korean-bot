@@ -33,7 +33,7 @@ from keyboards import (
     calendar_keyboard, timezone_offset_keyboard, TEACHER_LINK,
     slots_menu_teacher, student_transfer_menu, hw_submission_keyboard,
     time_picker_keyboard, slots_picker_keyboard, slots_delete_keyboard,
-    student_lesson_reminders_keyboard, 
+    student_lesson_reminders_keyboard, subscription_payment_keyboard, # <-- ДОБАВЛЕНО
     E_ADD, E_LIST, E_DELETE
 )
 
@@ -82,6 +82,8 @@ class AddHomework(StatesGroup):
 class SubmitHW(StatesGroup):
     media = State()
 
+class PaymentProof(StatesGroup):
+    waiting_photo = State()
 
 def is_teacher(uid: int) -> bool:
     return uid == TEACHER_ID
@@ -356,7 +358,7 @@ async def cb_slot_del(callback: CallbackQuery):
     await cb_slot_list(callback)
 
 
-# ---------- ОСТАЛЬНОЙ КОД (СТАТИСТИКА, ДОБАВЛЕНИЕ ЗАНЯТИЙ И Т.Д.) ----------
+# ---------- СТАТИСТИКА / ДОБАВЛЕНИЕ ЗАНЯТИЙ ----------
 @dp.callback_query(lambda c: c.data == "menu:stats")
 async def cb_stats(callback: CallbackQuery):
     await callback.answer()
@@ -490,6 +492,7 @@ async def add_title(message: types.Message, state: FSMContext):
     await message.answer(text, reply_markup=main_menu_teacher())
     await state.clear()
 
+# ---------- ДЗ ----------
 @dp.callback_query(lambda c: c.data == "menu:hw")
 async def cb_hw_menu(callback: CallbackQuery):
     await callback.answer()
@@ -685,7 +688,6 @@ async def process_hw_media(message: types.Message, state: FSMContext):
             sub = HomeworkSubmission(homework_id=hw_id, student_id=st.id, media_type=m_type, media_id=m_id)
             session.add(sub)
             await session.commit()
-            # Отправляем преподу само фото/видео
             if m_type == "photo":
                 await bot.send_photo(TEACHER_ID, photo=m_id, caption=f"📚 {st.full_name} прикрепил фото к ДЗ")
             else:
@@ -831,13 +833,12 @@ async def cb_transfer_pick(callback: CallbackQuery):
             return
         les_info = lesson.datetime_start.strftime("%d.%m %H:%M")
         text = f"🔄 Запрос на перенос\n\nУченик: {st.full_name}\nТекущее: {les_info}\nХочет: {slot.datetime_start.strftime('%d.%m %H:%M')}"
-        # Отправляем преподу с кнопками
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"transfer:approve:{lesson.id}:{slot.id}"),
              InlineKeyboardButton(text="❌ Отклонить", callback_data=f"transfer:decline:{slot.id}")]
         ])
         await bot.send_message(TEACHER_ID, text, reply_markup=kb)
-        slot.is_booked = True # Бронируем, чтобы никто другой не занял
+        slot.is_booked = True
         await session.commit()
     await callback.message.edit_text("✅ Запрос отправлен преподавателю! Жди подтверждения.", reply_markup=back_to_main())
 
@@ -847,16 +848,14 @@ async def cb_transfer_approve(callback: CallbackQuery):
     if not is_teacher(callback.from_user.id): return
     _, _, lesson_id_str, slot_id_str = callback.data.split(":")
     lesson_id, slot_id = int(lesson_id_str), int(slot_id_str)
-    
     async with async_session() as session:
         lesson = await session.get(Lesson, lesson_id)
         slot = await session.get(LessonSlot, slot_id)
         if lesson and slot:
             lesson.datetime_start = slot.datetime_start
-            await session.delete(slot) # Удаляем слот, так как он теперь занят
+            await session.delete(slot)
             await session.commit()
             await callback.message.edit_text("✅ Вы подтвердили перенос.")
-            # Уведомляем ученика
             r = await session.execute(select(Student).where(Student.id == lesson.student_id))
             st = r.scalar_one_or_none()
             if st:
@@ -870,11 +869,12 @@ async def cb_transfer_decline(callback: CallbackQuery):
     async with async_session() as session:
         slot = await session.get(LessonSlot, slot_id)
         if slot:
-            slot.is_booked = False # Освобождаем слот обратно
+            slot.is_booked = False
             await session.commit()
     await callback.message.edit_text("❌ Вы отклонили перенос. Слот снова свободен.")
 
 
+# ---------- ОПЛАТА ----------
 @dp.callback_query(lambda c: c.data == "menu:pay")
 async def cb_pay(callback: CallbackQuery):
     await callback.answer()
@@ -931,10 +931,17 @@ async def pay_send(message: types.Message, state: FSMContext):
     if tg is None:
         await message.answer("Не нашёл.")
         return
-    text = text_pay_after_button() if mode == "after" else text_pay_end_button()
-    kb = paid_button_keyboard()
+    
+    # ЛОГИКА ОТПРАВКИ В ЗАВИСИМОСТИ ОТ РЕЖИМА
+    if mode == "after":
+        text = text_pay_after_button()
+        kb = paid_button_keyboard()
+    else:
+        text = "💳 <b>Оплата абонемента</b>\n\nПожалуйста, переведите сумму и отправьте скриншот чека."
+        kb = subscription_payment_keyboard()
+
     try:
-        await bot.send_message(tg, text, reply_markup=kb)
+        await bot.send_message(tg, text, reply_markup=kb, parse_mode="HTML")
     except Exception as e:
         await message.answer(f"Ошибка: {e}")
         await state.clear()
@@ -942,6 +949,29 @@ async def pay_send(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("✅ Отправлено.", reply_markup=back_to_main("menu:pay"))
 
+
+@dp.callback_query(lambda c: c.data == "paid:send_screenshot")
+async def cb_paid_screenshot(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await callback.message.edit_text("Пожалуйста, отправьте фото или скриншот чека прямо в этот чат:")
+    await state.set_state(PaymentProof.waiting_photo)
+
+@dp.message(PaymentProof.waiting_photo)
+async def process_payment_proof(message: types.Message, state: FSMContext):
+    if not message.photo:
+        await message.answer("Пожалуйста, отправьте именно фото (скриншот чека).")
+        return
+    
+    async with async_session() as session:
+        r = await session.execute(select(Student).where(Student.tg_id == message.from_user.id))
+        st = r.scalar_one_or_none()
+        if st:
+            # Пересылаем чек тебе
+            await bot.forward_message(chat_id=TEACHER_ID, from_chat_id=message.chat.id, message_id=message.message_id)
+            await bot.send_message(TEACHER_ID, f"💰 Ученик {st.full_name} прислал(а) скриншот оплаты!")
+
+    await message.answer("✅ Скриншот отправлен преподавателю! Ожидайте подтверждения.", reply_markup=back_to_main())
+    await state.clear()
 
 @dp.callback_query(lambda c: c.data == "sp:open")
 async def cb_sp_open(callback: CallbackQuery):
