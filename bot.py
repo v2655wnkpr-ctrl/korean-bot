@@ -32,7 +32,8 @@ from keyboards import (
     confirm_delete_student_keyboard, hw_menu_teacher, hw_reminder_keyboard,
     calendar_keyboard, timezone_offset_keyboard, TEACHER_LINK,
     slots_menu_teacher, student_transfer_menu, hw_submission_keyboard,
-    time_picker_keyboard, slots_picker_keyboard, E_ADD, E_LIST, E_DELETE
+    time_picker_keyboard, slots_picker_keyboard, slots_delete_keyboard, # <-- ДОБАВЛЕНО
+    E_ADD, E_LIST, E_DELETE
 )
 
 load_dotenv()
@@ -383,13 +384,72 @@ async def cb_slot_list(callback: CallbackQuery):
         ).order_by(LessonSlot.datetime_start)
         r = await session.execute(q)
         slots = r.scalars().all()
+        
     if not slots:
         await callback.message.edit_text("Нет свободных слотов.", reply_markup=slots_menu_teacher())
         return
-    lines = ["📅 Свободные слоты:\n"]
-    for s in slots:
-        lines.append(f"• {s.datetime_start.strftime('%d.%m %H:%M')}")
-    await callback.message.edit_text("\n".join(lines), reply_markup=slots_menu_teacher())
+        
+    # Показываем слоты в виде кнопок для удаления
+    text = "📅 <b>Твои свободные слоты:</b>\n\nНажми на слот ❌, чтобы закрыть его:"
+    kb = slots_delete_keyboard(slots)
+    await callback.message.edit_text(text, reply_markup=kb)
+
+@dp.callback_query(lambda c: c.data.startswith("slot:del:"))
+async def cb_slot_del(callback: CallbackQuery):
+    await callback.answer()
+    if not is_teacher(callback.from_user.id):
+        return
+        
+    slot_id = int(callback.data.split(":")[2])
+    async with async_session() as session:
+        slot = await session.get(LessonSlot, slot_id)
+        if slot and not slot.is_booked:
+            await session.delete(slot)
+            await session.commit()
+            await callback.message.answer(f"✅ Слот на {slot.datetime_start.strftime('%d.%m %H:%M')} закрыт.")
+    
+    # Обновляем список слотов после удаления
+    await cb_slot_list(callback)
+
+
+# ---------- СТАТИСТИКА ----------
+
+@dp.callback_query(lambda c: c.data == "menu:stats")
+async def cb_stats(callback: CallbackQuery):
+    await callback.answer()
+    if not is_teacher(callback.from_user.id):
+        return
+        
+    async with async_session() as session:
+        # Считаем учеников
+        q_students = select(Student).where(Student.tg_id != TEACHER_ID)
+        r_students = await session.execute(q_students)
+        students_count = len(r_students.scalars().all())
+        
+        # Считаем все занятия
+        q_lessons = select(Lesson)
+        r_lessons = await session.execute(q_lessons)
+        lessons_count = len(r_lessons.scalars().all())
+        
+        # Считаем предстоящие занятия
+        now = now_msk()
+        q_future = select(Lesson).where(Lesson.datetime_start >= now)
+        r_future = await session.execute(q_future)
+        future_count = len(r_future.scalars().all())
+        
+        # Считаем свободные слоты
+        q_slots = select(LessonSlot).where(LessonSlot.is_booked == False, LessonSlot.datetime_start >= now)
+        r_slots = await session.execute(q_slots)
+        slots_count = len(r_slots.scalars().all())
+
+    text = (
+        f"📊 <b>Статистика</b>\n\n"
+        f"👥 Учеников: {students_count}\n"
+        f"📚 Всего занятий: {lessons_count}\n"
+        f"📅 Предстоящих занятий: {future_count}\n"
+        f"🟢 Свободных слотов: {slots_count}"
+    )
+    await callback.message.edit_text(text, reply_markup=back_to_main())
 
 
 # ---------- ДОБАВЛЕНИЕ ЗАНЯТИЯ ----------
