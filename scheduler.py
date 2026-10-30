@@ -100,4 +100,4 @@ def start_scheduler(bot):
     scheduler.add_job(check_lessons, 'interval', minutes=1, args=[bot])
     scheduler.add_job(check_homework_reminders, 'interval', minutes=1, args=[bot])
     scheduler.start()
-    logging.info("Планировщик запущен")
+    logging.info("Планировщик запущен") 
