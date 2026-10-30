@@ -961,3 +961,4 @@ dp.startup.register(on_startup)
 
 if __name__ == "__main__":
     web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
+    
