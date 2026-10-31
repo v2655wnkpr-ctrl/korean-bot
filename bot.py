@@ -355,7 +355,6 @@ async def cb_hw_del(callback: CallbackQuery):
             for s in (await session.execute(select(HomeworkSubmission).where(HomeworkSubmission.homework_id == hw_id))).scalars().all(): await session.delete(s)
             await session.delete(hw); await session.commit()
     await callback.message.edit_text("✅ Удалено.", reply_markup=hw_menu_teacher())
-
 @dp.callback_query(lambda c: c.data == "hw:list")
 async def cb_hw_list(callback: CallbackQuery):
     await callback.answer()
@@ -461,6 +460,7 @@ async def cb_lrem_hours(callback: CallbackQuery):
         if st: st.lesson_reminder_hours = hours; await session.commit()
     await callback.answer(f"Напомним за {hours} ч.", show_alert=True)
     await cb_settings_menu(callback)
+
 @dp.callback_query(lambda c: c.data == "transfer:click")
 async def cb_transfer_click(callback: CallbackQuery, state: FSMContext):
     await callback.answer(); await callback.message.edit_text("Как хочешь перенести?", reply_markup=student_transfer_menu())
@@ -590,8 +590,32 @@ async def cb_tariff_chosen(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "pay:single:req")
 async def cb_pay_single_req(callback: CallbackQuery):
     await callback.answer()
-    text = f"<b>Разовое занятие</b>\n\nСтоимость: <b>1500 ₽</b>\n\n<b>Реквизиты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nОтправьте скриншот."
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📸 Скриншот", callback_data="paid:send_screenshot")], [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:back:single", icon_custom_emoji_id=E_BACK)]])
+    text = "<b>Выберите тип разового занятия:</b>"
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Индивидуальное (800 ₽)", callback_data="pay:single:ind")],
+        [InlineKeyboardButton(text="Групповое (500 ₽)", callback_data="pay:single:grp")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:back:single", icon_custom_emoji_id=E_BACK)]
+    ])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+@dp.callback_query(lambda c: c.data == "pay:single:ind")
+async def cb_pay_single_ind(callback: CallbackQuery):
+    await callback.answer()
+    text = f"<b>Индивидуальное занятие</b>\n\nСтоимость: <b>800 ₽</b>\n\n<b>Реквизиты для оплаты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nПосле перевода отправьте скриншот."
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📸 Отправить скриншот", callback_data="paid:send_screenshot")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:single:req", icon_custom_emoji_id=E_BACK)]
+    ])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+@dp.callback_query(lambda c: c.data == "pay:single:grp")
+async def cb_pay_single_grp(callback: CallbackQuery):
+    await callback.answer()
+    text = f"<b>Групповое занятие</b>\n\nСтоимость: <b>500 ₽</b>\n\n<b>Реквизиты для оплаты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nПосле перевода отправьте скриншот."
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📸 Отправить скриншот", callback_data="paid:send_screenshot")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:single:req", icon_custom_emoji_id=E_BACK)]
+    ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 @dp.callback_query(lambda c: c.data == "paid:send_screenshot")
