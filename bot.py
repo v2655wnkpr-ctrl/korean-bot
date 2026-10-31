@@ -625,6 +625,86 @@ async def resch_apply(message: types.Message, state: FSMContext):
         if lesson: lesson.datetime_start = new_dt; await session.commit()
     await message.answer("✅ Перенесено!", reply_markup=main_menu_teacher()); await state.clear()
 
+# --- ОБРАБОТЧИКИ КНОПОК ОПЛАТЫ (ДОБАВИТЬ В КОНЕЦ ФАЙЛА) ---
+
+@dp.callback_query(lambda c: c.data == "pay:show_tariffs" or c.data.startswith("pay:show_tariffs:"))
+async def cb_pay_show_tariffs(callback: CallbackQuery):
+    await callback.answer()
+    context = callback.data.split(":")[2] if len(callback.data.split(":")) > 2 else "single"
+    text = (
+        "📚 <b>Наши тарифы:</b>\n\n"
+        "• Индивидуально (4 занятия) — 4000 ₽\n"
+        "• Индивидуально (8 занятий) — 7000 ₽\n"
+        "• В группе (4 занятия) — 2000 ₽\n"
+        "• В группе (8 занятий) — 3500 ₽\n\n"
+        "Выберите подходящий вариант 👇"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Индивид. 4 зан.", callback_data=f"tar:ind_4:{context}")],
+        [InlineKeyboardButton(text="Индивид. 8 зан.", callback_data=f"tar:ind_8:{context}")],
+        [InlineKeyboardButton(text="Группа 4 зан.", callback_data=f"tar:grp_4:{context}")],
+        [InlineKeyboardButton(text="Группа 8 зан.", callback_data=f"tar:grp_8:{context}")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"pay:back:{context}", icon_custom_emoji_id=E_BACK)]
+    ])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+@dp.callback_query(lambda c: c.data == "pay:single:req")
+async def cb_pay_single_req(callback: CallbackQuery):
+    await callback.answer()
+    text = (
+        "<b>Оплата разового занятия</b>\n\n"
+        "Стоимость: <b>1500 ₽</b>\n\n"
+        "<b>Реквизиты для оплаты:</b>\n"
+        "Яндекс Банк: <code>+7 927 217-38-06</code>\n\n"
+        "После перевода отправьте скриншот."
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📸 Отправить скриншот", callback_data="paid:send_screenshot")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:back:single", icon_custom_emoji_id=E_BACK)]
+    ])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+@dp.callback_query(lambda c: c.data.startswith("pay:back:"))
+async def cb_pay_back(callback: CallbackQuery):
+    await callback.answer()
+    context = callback.data.split(":")[2]
+    if context == "single":
+        text = text_pay_after_button()
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Перейти к оплате", callback_data="pay:single:req")],
+            [InlineKeyboardButton(text="📚 Посмотреть тарифы", callback_data="pay:show_tariffs:single")]
+        ])
+    else:
+        text = text_pay_end_button()
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📚 Выбрать абонемент", callback_data="pay:show_tariffs:sub")]
+        ])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+@dp.callback_query(lambda c: c.data.startswith("tar:"))
+async def cb_tariff_chosen(callback: CallbackQuery):
+    await callback.answer()
+    parts = callback.data.split(":")
+    context = parts[2] if len(parts) > 2 else "single"
+    price = {"ind_4": "4000 ₽", "ind_8": "7000 ₽", "grp_4": "2000 ₽", "grp_8": "3500 ₽"}.get(parts[1], "Уточняйте")
+    
+    text = (
+        f"Вы выбрали тариф.\nСумма: <b>{price}</b>\n\n"
+        f"<b>Реквизиты для оплаты:</b>\n"
+        f"Яндекс Банк: <code>+7 927 217-38-06</code>\n\n"
+        f"После перевода отправьте скриншот."
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📸 Отправить скриншот", callback_data="paid:send_screenshot")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"pay:show_tariffs:{context}", icon_custom_emoji_id=E_BACK)]
+    ])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+@dp.callback_query(lambda c: c.data == "paid:send_screenshot")
+async def cb_paid_screenshot(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await callback.message.edit_text("Отправьте скриншот чека в этот чат:")
+    await state.set_state(PaymentProof.waiting_photo)
 async def health(request): return web.Response(text="OK")
 
 async def on_startup(bot: Bot) -> None:
