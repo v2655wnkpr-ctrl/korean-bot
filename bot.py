@@ -511,11 +511,11 @@ async def cb_lrem_hours(callback: CallbackQuery):
     await callback.answer()
     hours = int(callback.data.split(":")[1])
     async with async_session() as session:
-        st = (await session.execute(select(Student).where(Student.tg_id == callback.from_user.id))).scalar_one_or
-        _or_none()
+        st = (await session.execute(select(Student).where(Student.tg_id == callback.from_user.id))).scalar_one_or_none()
         if st:
             st.lesson_reminder_hours = hours
             await session.commit()
+await session.commit()
     await callback.answer(f"Напомним за {hours} ч.", show_alert=True)
     await cb_settings_menu(callback)
 
@@ -548,7 +548,11 @@ async def cb_transfer_pick(callback: CallbackQuery):
         if not st or not slot: return
         lesson = (await session.execute(select(Lesson).where(Lesson.student_id == st.id, Lesson.datetime_start >= now_msk()).order_by(Lesson.datetime_start))).scalars().first()
         if not lesson: return await callback.message.edit_text("Нет предстоящих занятий.", reply_markup=back_to_main())
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"transfer:approve:{lesson.id}:{slot.id}"), InlineKeyboardButton(text="❌ Отклонить", callback_data=f"transfer:decline:{slot.id}")]])
+        
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"transfer:approve:{lesson.id}:{slot.id}"), 
+            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"transfer:decline:{slot.id}:{st.tg_id}")
+        ]])
         await bot.send_message(TEACHER_ID, f"🔄 Перенос\nУченик: {st.full_name}\nТекущее: {lesson.datetime_start.strftime('%d.%m %H:%M')}\nХочет: {slot.datetime_start.strftime('%d.%m %H:%M')}", reply_markup=kb)
         slot.is_booked = True
         await session.commit()
@@ -573,7 +577,10 @@ async def cb_transfer_approve(callback: CallbackQuery):
 async def cb_transfer_decline(callback: CallbackQuery):
     await callback.answer("Отклонено")
     if not is_teacher(callback.from_user.id): return
-    slot_id = int(callback.data.split(":")[2])
+    parts = callback.data.split(":")
+    slot_id = int(parts[2])
+    student_tg_id = int(parts[3]) if len(parts) > 3 else None
+    
     async with async_session() as session:
         slot = await session.get(LessonSlot, slot_id)
         if slot:
@@ -581,16 +588,11 @@ async def cb_transfer_decline(callback: CallbackQuery):
             await session.commit()
     await callback.message.edit_text("❌ Вы отклонили перенос. Слот снова свободен.")
     
-    # Уведомление ученику об отказе (то, о чем ты просил)
-    async with async_session() as session:
-        st = (await session.execute(select(Student).where(Student.tg_id == callback.from_user.id))).scalar_one_or_none()
-    # В реальности мы не знаем, кому именно отклонили (т.к. callback от препода), 
-    # но если ты хочешь уведомить ученика, код будет таким. 
-    # (Для простоты мы отправим это сообщение в чат с учеником, если знаем его ID, 
-    # но так как callback пришел от препода, нам нужно найти ученика по lesson_id, если он был передан)
-    # Пока оставим просто сообщение для препода.
+    if student_tg_id:
+        try: await bot.send_message(student_tg_id, "❌ Преподаватель не может согласовать это время. Скоро свяжусь с вами.")
+        except Exception: pass
 
-# --- ОПЛАТА И АБОНЕМЕНТЫ (НОВЫЙ СЦЕНАРИЙ С ВОЗВРАТАМИ) ---
+# --- ОПЛАТА И АБОНЕМЕНТЫ ---
 @dp.callback_query(lambda c: c.data == "menu:pay")
 async def cb_pay(callback: CallbackQuery):
     await callback.answer()
@@ -599,7 +601,7 @@ async def cb_pay(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data.startswith("pay:"))
 async def cb_pay_choose(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
-    if callback.data in ["pay:show_tariffs", "pay:single:req", "pay:back_start"]: return
+    if callback.data in ["pay:show_tariffs", "pay:single:req", "pay:back"]: return
     if not is_teacher(callback.from_user.id): return
     mode = callback.data.split(":")[1]
     async with async_session() as session:
@@ -628,64 +630,74 @@ async def pay_send(message: types.Message, state: FSMContext):
     if tg is None: return await message.answer("Не нашёл.")
     
     if data.get("mode") == "after":
-        text = "💰 <b>Разовое занятие</b>\n\nСпасибо за занятие! Пожалуйста, переведите сумму за урок.\nЕсли хотите приобрести абонемент, выберите кнопку ниже."
+        text = "💰 <b>Разовое занятие</b>\n\nПожалуйста, переведите сумму за прошедшее занятие.\nВы также можете посмотреть тарифы на абонемент."
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💳 Оплатить", callback_data="pay:single:req")],
-            [InlineKeyboardButton(text="📚 Посмотреть тарифы", callback_data="pay:show_tariffs")],
+            [InlineKeyboardButton(text="💳 Перейти к оплате", callback_data="pay:single:req")],
+            [InlineKeyboardButton(text="📚 Посмотреть тарифы", callback_data="pay:show_tariffs:single")]
         ])
     else:
-        text = "💳 <b>Продление абонемента</b>\n\nВаш абонемент заканчивается. Пожалуйста, выберите подходящий тариф для продления."
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📚 Выбрать абонемент", callback_data="pay:show_tariffs")]])
-    
+        text = "💳 <b>Продление абонемента</b>\n\nВаш абонемент заканчивается. Пожалуйста, выберите тариф."
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📚 Выбрать абонемент", callback_data="pay:show_tariffs:sub")]
+        ])
     try: await bot.send_message(tg, text, reply_markup=kb, parse_mode="HTML")
     except Exception as e: await message.answer(f"Ошибка: {e}")
     await state.clear()
     await message.answer("✅ Уведомление отправлено.", reply_markup=back_to_main("menu:pay"))
 
-@dp.callback_query(lambda c: c.data == "pay:show_tariffs")
+@dp.callback_query(lambda c: c.data.startswith("pay:show_tariffs"))
 async def cb_pay_show_tariffs(callback: CallbackQuery):
     await callback.answer()
+    context = callback.data.split(":")[2] if len(callback.data.split(":")) > 2 else "single"
     text = "📚 <b>Наши тарифы:</b>\n\n• Индивидуально (4 занятия) — 4000 ₽\n• Индивидуально (8 занятий) — 7000 ₽\n• В группе (4 занятия) — 2000 ₽\n• В группе (8 занятий) — 3500 ₽\n\nВыберите подходящий вариант 👇"
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Индивид. 4 зан.", callback_data="tar:ind_4")],
-        [InlineKeyboardButton(text="Индивид. 8 зан.", callback_data="tar:ind_8")],
-        [InlineKeyboardButton(text="Группа 4 зан.", callback_data="tar:grp_4")],
-        [InlineKeyboardButton(text="Группа 8 зан.", callback_data="tar:grp_8")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:back_start", icon_custom_emoji_id=E_BACK)]
+        [InlineKeyboardButton(text="Индивид. 4 зан.", callback_data=f"tar:ind_4:{context}")],
+        [InlineKeyboardButton(text="Индивид. 8 зан.", callback_data=f"tar:ind_8:{context}")],
+        [InlineKeyboardButton(text="Группа 4 зан.", callback_data=f"tar:grp_4:{context}")],
+        [InlineKeyboardButton(text="Группа 8 зан.", callback_data=f"tar:grp_8:{context}")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"pay:back:{context}", icon_custom_emoji_id=E_BACK)]
     ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
-@dp.callback_query(lambda c: c.data == "pay:back_start")
-async def cb_pay_back_start(callback: CallbackQuery):
+@dp.callback_query(lambda c: c.data.startswith("pay:back:"))
+async def cb_pay_back(callback: CallbackQuery):
     await callback.answer()
-    text = "💰 <b>Разовое занятие</b>\n\nСпасибо за занятие! Пожалуйста, переведите сумму за урок.\nЕсли хотите приобрести абонемент, выберите кнопку ниже."
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Оплатить", callback_data="pay:single:req")],
-        [InlineKeyboardButton(text="📚 Посмотреть тарифы", callback_data="pay:show_tariffs")],
-    ])
+    context = callback.data.split(":")[2]
+    if context == "single":
+        text = "💰 <b>Разовое занятие</b>\n\nПожалуйста, переведите сумму за прошедшее занятие.\nВы также можете посмотреть тарифы на абонемент."
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Перейти к оплате", callback_data="pay:single:req")],
+            [InlineKeyboardButton(text="📚 Посмотреть тарифы", callback_data="pay:show_tariffs:single")]
+        ])
+    else:
+        text = "💳 <b>Продление абонемента</b>\n\nВаш абонемент заканчивается. Пожалуйста, выберите тариф."
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📚 Выбрать абонемент", callback_data="pay:show_tariffs:sub")]
+        ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 @dp.callback_query(lambda c: c.data.startswith("tar:"))
 async def cb_tariff_chosen(callback: CallbackQuery):
     await callback.answer()
-    tariff = callback.data.split(":")[1]
+    parts = callback.data.split(":")
+    tariff = parts[1]
+    context = parts[2] if len(parts) > 2 else "single"
     price = {"ind_4": "4000 ₽", "ind_8": "7000 ₽", "grp_4": "2000 ₽", "grp_8": "3500 ₽"}.get(tariff, "Уточняйте")
-    text = f"Вы выбрали тариф.\nСумма: <b>{price}</b>\n\n<b>Реквизиты:</b>\nСбербанк: <code>1234 5678 9010 1234</code> (Иван И.)\nСБП: <code>+7 999 123-45-67</code>\n\nПосле перевода отправьте скриншот и нажмите «Я оплатил(а)»."
+    
+    text = f"Вы выбрали тариф.\nСумма: <b>{price}</b>\n\n<b>Реквизиты для оплаты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nПосле перевода отправьте скриншот."
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📸 Отправить скриншот", callback_data="paid:send_screenshot")],
-        [InlineKeyboardButton(text="✅ Я оплатил(а)", callback_data="paid:click")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:show_tariffs", icon_custom_emoji_id=E_BACK)],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"pay:show_tariffs:{context}", icon_custom_emoji_id=E_BACK)],
     ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 @dp.callback_query(lambda c: c.data == "pay:single:req")
 async def cb_pay_single_req(callback: CallbackQuery):
     await callback.answer()
-    text = f"<b>Оплата разового занятия</b>\n\nСтоимость: <b>1500 ₽</b>\n\n<b>Реквизиты:</b>\nСбербанк: <code>1234 5678 9010 1234</code> (Иван И.)\nСБП: <code>+7 999 123-45-67</code>\n\nПосле перевода отправьте скриншот и нажмите «Я оплатил(а)»."
+    text = f"<b>Оплата разового занятия</b>\n\nСтоимость: <b>1500 ₽</b>\n\n<b>Реквизиты для оплаты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nПосле перевода отправьте скриншот."
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📸 Отправить скриншот", callback_data="paid:send_screenshot")],
-        [InlineKeyboardButton(text="✅ Я оплатил(а)", callback_data="paid:click")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:back_start", icon_custom_emoji_id=E_BACK)],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:back:single", icon_custom_emoji_id=E_BACK)],
     ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
@@ -697,14 +709,14 @@ async def cb_paid_screenshot(callback: CallbackQuery, state: FSMContext):
 
 @dp.message(PaymentProof.waiting_photo)
 async def process_payment_proof(message: types.Message, state: FSMContext):
-    if not message.photo: return await message.answer("Отправьте именно фото.")
+    if not message.photo: return await message.answer("Отправьте именно фото (скриншот чека).")
     async with async_session() as session:
         st = (await session.execute(select(Student).where(Student.tg_id == message.from_user.id))).scalar_one_or_none()
         if st:
             await bot.forward_message(chat_id=TEACHER_ID, from_chat_id=message.chat.id, message_id=message.message_id)
-            await bot.send_message(TEACHER_ID, f"💰 Ученик {st.full_name} прислал(а) скриншот!")
+            await bot.send_message(TEACHER_ID, f"💰 Ученик {st.full_name} прислал(а) скриншот оплаты!")
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ Я оплатил(а)", callback_data="paid:click")]])
-    await message.answer("✅ Скриншот отправлен! Нажмите кнопку ниже.", reply_markup=kb)
+    await message.answer("✅ Скриншот отправлен! Теперь нажмите кнопку ниже.", reply_markup=kb)
     await state.clear()
 
 @dp.callback_query(lambda c: c.data == "paid:click")
@@ -881,3 +893,4 @@ dp.startup.register(on_startup)
 
 if __name__ == "__main__":
     web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
+    
