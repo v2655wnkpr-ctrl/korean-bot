@@ -396,8 +396,7 @@ async def cb_hw_del(callback: CallbackQuery):
             await session.delete(hw)
             await session.commit()
     await callback.message.edit_text("✅ Удалено.", reply_markup=hw_menu_teacher())
-
-@dp.callback_query(lambda c: c.data == "hw:list")
+    @dp.callback_query(lambda c: c.data == "hw:list")
 async def cb_hw_list(callback: CallbackQuery):
     await callback.answer()
     async with async_session() as session:
@@ -515,7 +514,6 @@ async def cb_lrem_hours(callback: CallbackQuery):
         if st:
             st.lesson_reminder_hours = hours
             await session.commit()
-await session.commit()
     await callback.answer(f"Напомним за {hours} ч.", show_alert=True)
     await cb_settings_menu(callback)
 
@@ -893,4 +891,3 @@ dp.startup.register(on_startup)
 
 if __name__ == "__main__":
     web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
-    
