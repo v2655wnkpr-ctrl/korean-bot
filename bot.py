@@ -847,7 +847,32 @@ async def cb_stu_book_decline(callback: CallbackQuery):
         if slot: slot.is_booked = False; await session.commit()
     await callback.message.edit_text("❌ Вы отклонили запись. Слот снова свободен.")
     await bot.send_message(int(student_tg_id), "❌ Преподаватель отклонил запись на это время. Пожалуйста, выберите другое.")
+@dp.callback_query(lambda c: c.data.startswith("stdel:ask:"))
+async def cb_stdel_ask(callback: CallbackQuery):
+    await callback.answer()
+    if not is_teacher(callback.from_user.id): return
+    sid = int(callback.data.split(":")[2])
+    await callback.message.edit_text("Точно удалить ученика и все его записи?", reply_markup=confirm_delete_student_keyboard(sid))
 
+@dp.callback_query(lambda c: c.data.startswith("stdel:"))
+async def cb_stdel_confirm(callback: CallbackQuery):
+    await callback.answer()
+    if not is_teacher(callback.from_user.id): return
+    sid = int(callback.data.split(":")[1])
+    
+    async with async_session() as session:
+        # Удаляем связанные данные (занятия, сдачи ДЗ, прикрепленные файлы)
+        for l in (await session.execute(select(Lesson).where(Lesson.student_id == sid))).scalars().all(): await session.delete(l)
+        for d in (await session.execute(select(HomeworkDone).where(HomeworkDone.student_id == sid))).scalars().all(): await session.delete(d)
+        for sub in (await session.execute(select(HomeworkSubmission).where(HomeworkSubmission.student_id == sid))).scalars().all(): await session.delete(sub)
+        
+        # Удаляем самого ученика
+        student = await session.get(Student, sid)
+        if student:
+            await session.delete(student)
+        await session.commit()
+        
+    await callback.message.edit_text("✅ Ученик и все его данные удалены.", reply_markup=main_menu_teacher())
 async def health(request): return web.Response(text="OK")
 async def on_startup(bot: Bot) -> None:
     await init_db()
