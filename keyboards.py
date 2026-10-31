@@ -56,15 +56,23 @@ def time_picker_keyboard(selected_times=None):
         row.append(InlineKeyboardButton(text=f"{mark}{h}", callback_data=f"time:{h}"))
         if len(row) == 4: b.append(row); row = []
     if row: b.append(row)
-    b.append([InlineKeyboardButton(text="💾 Сохранить выбранные", callback_data="time:save")])
+    b.append([InlineKeyboardButton(text="💾 Сохранить", callback_data="time:save")])
     b.append([InlineKeyboardButton(text="Назад", callback_data="menu:slots", icon_custom_emoji_id=E_BACK)])
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 def timezone_offset_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Москва (0)", callback_data="tz:0")], [InlineKeyboardButton(text="Владивосток (+7)", callback_data="tz:7")], [InlineKeyboardButton(text="Другой город", callback_data="tz:other")]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Москва (0)", callback_data="tz:0")], 
+        [InlineKeyboardButton(text="Владивосток (+7)", callback_data="tz:7")], 
+        [InlineKeyboardButton(text="Другой город", callback_data="tz:other")]
+    ])
 
 def slots_menu_teacher():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть слоты (календарь)", callback_data="slot:show_calendar", icon_custom_emoji_id=E_SLOT_ADD)], [InlineKeyboardButton(text="Мои открытые слоты", callback_data="slot:list", icon_custom_emoji_id=E_SLOT_LIST)], [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Открыть слоты (календарь)", callback_data="slot:show_calendar", icon_custom_emoji_id=E_SLOT_ADD)], 
+        [InlineKeyboardButton(text="Мои открытые слоты", callback_data="slot:list", icon_custom_emoji_id=E_SLOT_LIST)], 
+        [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]
+    ])
 
 def slots_picker_keyboard(slots, sid: int):
     b = [[InlineKeyboardButton(text=s.datetime_start.strftime("%d.%m %H:%M"), callback_data=f"act_slot:{sid}:{s.id}")] for s in slots[:10]]
@@ -73,25 +81,34 @@ def slots_picker_keyboard(slots, sid: int):
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 def student_transfer_menu():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Предложить время", callback_data="transfer:ask_slot", icon_custom_emoji_id=E_TRANSFER)], [InlineKeyboardButton(text="Уточнить у препода", callback_data="transfer:ask_teacher", icon_custom_emoji_id=E_FIND)], [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Предложить время", callback_data="transfer:ask_slot", icon_custom_emoji_id=E_TRANSFER)], 
+        [InlineKeyboardButton(text="Уточнить у препода", callback_data="transfer:ask_teacher", icon_custom_emoji_id=E_FIND)], 
+        [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]
+    ])
 
 def hw_submission_keyboard(hw_id: int):
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Прикрепить фото/видео", callback_data=f"hw:attach:{hw_id}", icon_custom_emoji_id=E_HW_SUBMIT)], [InlineKeyboardButton(text="Я выполнил", callback_data=f"hw:finish:{hw_id}", icon_custom_emoji_id=E_HW_DONE)]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Прикрепить фото/видео", callback_data=f"hw:attach:{hw_id}", icon_custom_emoji_id=E_HW_SUBMIT)], 
+        [InlineKeyboardButton(text="Я выполнил", callback_data=f"hw:finish:{hw_id}", icon_custom_emoji_id=E_HW_DONE)]
+    ])
 
 def back_to_main(cb: str = "menu:main"):
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Назад", callback_data=cb, icon_custom_emoji_id=E_BACK)]])
 
-def hours_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="1 час", callback_data="h:1"), InlineKeyboardButton(text="3 часа", callback_data="h:3")], [InlineKeyboardButton(text="1 день", callback_data="h:24"), InlineKeyboardButton(text="2 дня", callback_data="h:48")], [InlineKeyboardButton(text="Неделя", callback_data="h:168")], [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
-
 def pay_menu():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="После урока", callback_data="pay:after", icon_custom_emoji_id=E_PAY)], [InlineKeyboardButton(text="Абонемент", callback_data="pay:end", icon_custom_emoji_id=E_PAY)], [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
-
-def tariffs_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Индивид. 4 зан.", callback_data="tar:ind_4")], [InlineKeyboardButton(text="Индивид. 8 зан.", callback_data="tar:ind_8")], [InlineKeyboardButton(text="Группа 4 зан.", callback_data="tar:grp_4")], [InlineKeyboardButton(text="Группа 8 зан.", callback_data="tar:grp_8")]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="После урока", callback_data="pay:after", icon_custom_emoji_id=E_PAY)], 
+        [InlineKeyboardButton(text="Абонемент", callback_data="pay:end", icon_custom_emoji_id=E_PAY)], 
+        [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]
+    ])
 
 def card_keyboard(student_id: int):
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Занятие", callback_data=f"act:add:{student_id}", icon_custom_emoji_id=E_ADD), InlineKeyboardButton(text="Оплата", callback_data=f"act:pay:{student_id}", icon_custom_emoji_id=E_PAY)], [InlineKeyboardButton(text="Удалить", callback_data=f"stdel:ask:{student_id}", icon_custom_emoji_id=E_DELETE)], [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Занятие", callback_data=f"act:add:{student_id}", icon_custom_emoji_id=E_ADD), InlineKeyboardButton(text="Оплата", callback_data=f"act:pay:{student_id}", icon_custom_emoji_id=E_PAY)], 
+        [InlineKeyboardButton(text="Удалить", callback_data=f"stdel:ask:{student_id}", icon_custom_emoji_id=E_DELETE)], 
+        [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]
+    ])
 
 def set_paid_students_keyboard(students):
     b = [[InlineKeyboardButton(text=s.full_name[:28] + "..." if len(s.full_name) > 28 else s.full_name, callback_data=f"sp:{s.id}")] for s in students]
@@ -99,25 +116,16 @@ def set_paid_students_keyboard(students):
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 def set_paid_amounts_keyboard(sid: int, current: int = 0):
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="4 зан.", callback_data=f"spa:{sid}:4"), InlineKeyboardButton(text="8 зан.", callback_data=f"spa:{sid}:8")], [InlineKeyboardButton(text="12 зан.", callback_data=f"spa:{sid}:12"), InlineKeyboardButton(text="16 зан.", callback_data=f"spa:{sid}:16")], [InlineKeyboardButton(text="➖ -1", callback_data=f"spa:{sid}:{current - 1}"), InlineKeyboardButton(text=f"Сейчас: {current}", callback_data="ignore"), InlineKeyboardButton(text="➕ +1", callback_data=f"spa:{sid}:{current + 1}")], [InlineKeyboardButton(text="❌ Обнулить", callback_data=f"spa:{sid}:0")], [InlineKeyboardButton(text="Назад", callback_data="sp:open", icon_custom_emoji_id=E_BACK)]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="4 зан.", callback_data=f"spa:{sid}:4"), InlineKeyboardButton(text="8 зан.", callback_data=f"spa:{sid}:8")], 
+        [InlineKeyboardButton(text="12 зан.", callback_data=f"spa:{sid}:12"), InlineKeyboardButton(text="16 зан.", callback_data=f"spa:{sid}:16")], 
+        [InlineKeyboardButton(text="➖ -1", callback_data=f"spa:{sid}:{current - 1}"), InlineKeyboardButton(text=f"Сейчас: {current}", callback_data="ignore"), InlineKeyboardButton(text="➕ +1", callback_data=f"spa:{sid}:{current + 1}")], 
+        [InlineKeyboardButton(text="❌ Обнулить", callback_data=f"spa:{sid}:0")], 
+        [InlineKeyboardButton(text="Назад", callback_data="sp:open", icon_custom_emoji_id=E_BACK)]
+    ])
 
 def confirm_delete_student_keyboard(sid: int):
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Да", callback_data=f"stdel:{sid}", icon_custom_emoji_id=E_DELETE), InlineKeyboardButton(text="Нет", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
-
-def paid_button_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Посмотреть абонементы", callback_data="show:tariffs", icon_custom_emoji_id=E_LIST)], [InlineKeyboardButton(text="Я оплатил(а)", callback_data="paid:click", icon_custom_emoji_id=E_PAY)]])
-
-def subscription_payment_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📸 Отправить скриншот", callback_data="paid:send_screenshot", icon_custom_emoji_id=E_HW_SUBMIT)], [InlineKeyboardButton(text="Посмотреть абонементы", callback_data="show:tariffs", icon_custom_emoji_id=E_LIST)]])
-
-def back_from_paid_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="paid:back", icon_custom_emoji_id=E_DELETE)]])
-
-def transfer_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Перенести", callback_data="transfer:click", icon_custom_emoji_id=E_RESCHED)]])
-
-def transfer_cancel_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="transfer:cancel", icon_custom_emoji_id=E_DELETE)]])
 
 def lessons_action_keyboard(lessons, action):
     b = [[InlineKeyboardButton(text=f"{les.datetime_start.strftime('%d.%m %H:%M')} — {les.title}", callback_data=f"{action}:{les.id}")] for les in lessons[:15]]
@@ -128,12 +136,19 @@ def confirm_delete_keyboard(lid: int):
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Удалить", callback_data=f"confirm_del:{lid}", icon_custom_emoji_id=E_DELETE), InlineKeyboardButton(text="Отмена", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
 
 def hw_menu_teacher():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Создать ДЗ", callback_data="hw:create", icon_custom_emoji_id=E_ADD)], [InlineKeyboardButton(text="Все ДЗ", callback_data="hw:list_teacher", icon_custom_emoji_id=E_LIST)], [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Создать ДЗ", callback_data="hw:create", icon_custom_emoji_id=E_ADD)], 
+        [InlineKeyboardButton(text="Все ДЗ", callback_data="hw:list_teacher", icon_custom_emoji_id=E_LIST)], 
+        [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]
+    ])
 
 def hw_reminder_keyboard(enabled: bool):
     btn_text = "Выключить напоминания" if enabled else "Включить напоминания"
     btn_icon = E_DELETE if enabled else E_HW_DONE
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=btn_text, callback_data="hwrem:toggle", icon_custom_emoji_id=btn_icon)], [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=btn_text, callback_data="hwrem:toggle", icon_custom_emoji_id=btn_icon)], 
+        [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]
+    ])
 
 def calendar_keyboard(year: int, month: int, days_with_lessons: set, free_slots_days: set = None, prefix: str = "cal"):
     kb = []
@@ -163,11 +178,9 @@ def slots_delete_keyboard(slots):
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 def student_lesson_reminders_keyboard(current_hours: int):
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"Текущее: за {current_hours} ч.", callback_data="ignore")], [InlineKeyboardButton(text="За 1 час", callback_data="lrem:1"), InlineKeyboardButton(text="За 2 часа", callback_data="lrem:2")], [InlineKeyboardButton(text="За 3 часа", callback_data="lrem:3"), InlineKeyboardButton(text="За 24 часа", callback_data="lrem:24")], [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
-
-# НОВЫЕ КЛАВИАТУРЫ ДЛЯ ВОЗВРАТА В ОПЛАТУ
-def back_to_pay_start_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:back_start", icon_custom_emoji_id=E_BACK)]])
-
-def back_to_tariffs_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:show_tariffs", icon_custom_emoji_id=E_BACK)]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"Текущее: за {current_hours} ч.", callback_data="ignore")], 
+        [InlineKeyboardButton(text="За 1 час", callback_data="lrem:1"), InlineKeyboardButton(text="За 2 часа", callback_data="lrem:2")], 
+        [InlineKeyboardButton(text="За 3 часа", callback_data="lrem:3"), InlineKeyboardButton(text="За 24 часа", callback_data="lrem:24")], 
+        [InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]
+    ])
