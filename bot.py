@@ -355,6 +355,7 @@ async def cb_hw_del(callback: CallbackQuery):
             for s in (await session.execute(select(HomeworkSubmission).where(HomeworkSubmission.homework_id == hw_id))).scalars().all(): await session.delete(s)
             await session.delete(hw); await session.commit()
     await callback.message.edit_text("✅ Удалено.", reply_markup=hw_menu_teacher())
+
 @dp.callback_query(lambda c: c.data == "hw:list")
 async def cb_hw_list(callback: CallbackQuery):
     await callback.answer()
@@ -441,7 +442,8 @@ async def cb_student_lessons(callback: CallbackQuery):
     if past:
         lines.append("<b>Прошедшие:</b>")
         for l in past: lines.append(f"✓ {(l.datetime_start + timedelta(hours=st.timezone_offset)).strftime('%d.%m %H:%M')} — {l.title}")
-    kb = [[InlineKeyboardButton(text="Перенести", callback_data="transfer:click", icon_custom_emoji_id=E_RESCHED)]] if up else []
+    kb = [[InlineKeyboardButton(text="➕ Записаться на занятие", callback_data="stu_book:calendar")]]
+    if up: kb.append([InlineKeyboardButton(text="Перенести", callback_data="transfer:click", icon_custom_emoji_id=E_RESCHED)])
     kb.append([InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)])
     await callback.message.edit_text("\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="HTML")
 
@@ -518,7 +520,6 @@ async def cb_transfer_decline(callback: CallbackQuery):
     if student_tg_id:
         try: await bot.send_message(student_tg_id, "❌ Преподаватель не может согласовать это время. Скоро свяжусь с вами.")
         except Exception: pass
-
 @dp.callback_query(lambda c: c.data == "menu:pay")
 async def cb_pay(callback: CallbackQuery):
     await callback.answer()
@@ -561,8 +562,21 @@ async def pay_send(message: types.Message, state: FSMContext):
 async def cb_pay_show_tariffs(callback: CallbackQuery):
     await callback.answer()
     context = callback.data.split(":")[2] if len(callback.data.split(":")) > 2 else "single"
-    text = "📚 <b>Наши тарифы:</b>\n\n• Индивидуально (4 занятия) — 4000 ₽\n• Индивидуально (8 занятий) — 7000 ₽\n• В группе (4 занятия) — 2000 ₽\n• В группе (8 занятий) — 3500 ₽\n\nВыберите 👇"
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Индивид. 4 зан.", callback_data=f"tar:ind_4:{context}")], [InlineKeyboardButton(text="Индивид. 8 зан.", callback_data=f"tar:ind_8:{context}")], [InlineKeyboardButton(text="Группа 4 зан.", callback_data=f"tar:grp_4:{context}")], [InlineKeyboardButton(text="Группа 8 зан.", callback_data=f"tar:grp_8:{context}")], [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"pay:back:{context}", icon_custom_emoji_id=E_BACK)]])
+    text = (
+        "📚 <b>Наши тарифы:</b>\n\n"
+        "• Индивидуально (4 занятия) — 2500 ₽\n"
+        "• Индивидуально (8 занятий) — 5000 ₽\n"
+        "• В группе (4 занятия) — 1500 ₽\n"
+        "• В группе (8 занятий) — 3500 ₽\n\n"
+        "Выберите подходящий вариант 👇"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Индивид. 4 зан.", callback_data=f"tar:ind_4:{context}")], 
+        [InlineKeyboardButton(text="Индивид. 8 зан.", callback_data=f"tar:ind_8:{context}")], 
+        [InlineKeyboardButton(text="Группа 4 зан.", callback_data=f"tar:grp_4:{context}")], 
+        [InlineKeyboardButton(text="Группа 8 зан.", callback_data=f"tar:grp_8:{context}")], 
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"pay:back:{context}", icon_custom_emoji_id=E_BACK)]
+    ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 @dp.callback_query(lambda c: c.data.startswith("pay:back:"))
@@ -582,8 +596,8 @@ async def cb_tariff_chosen(callback: CallbackQuery):
     await callback.answer()
     parts = callback.data.split(":")
     context = parts[2] if len(parts) > 2 else "single"
-    price = {"ind_4": "4000 ₽", "ind_8": "7000 ₽", "grp_4": "2000 ₽", "grp_8": "3500 ₽"}.get(parts[1], "Уточняйте")
-    text = f"Вы выбрали: <b>{price}</b>\n\n<b>Реквизиты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nОтправьте скриншот."
+    price = {"ind_4": "2500 ₽", "ind_8": "5000 ₽", "grp_4": "1500 ₽", "grp_8": "3500 ₽"}.get(parts[1], "Уточняйте")
+    text = f"Вы выбрали тариф.\nСумма: <b>{price}</b>\n\n<b>Реквизиты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nОтправьте скриншот."
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📸 Скриншот", callback_data="paid:send_screenshot")], [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"pay:show_tariffs:{context}", icon_custom_emoji_id=E_BACK)]])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
@@ -601,21 +615,15 @@ async def cb_pay_single_req(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "pay:single:ind")
 async def cb_pay_single_ind(callback: CallbackQuery):
     await callback.answer()
-    text = f"<b>Индивидуальное занятие</b>\n\nСтоимость: <b>800 ₽</b>\n\n<b>Реквизиты для оплаты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nПосле перевода отправьте скриншот."
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📸 Отправить скриншот", callback_data="paid:send_screenshot")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:single:req", icon_custom_emoji_id=E_BACK)]
-    ])
+    text = f"<b>Индивидуальное занятие</b>\n\nСтоимость: <b>800 ₽</b>\n\n<b>Реквизиты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nОтправьте скриншот."
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📸 Скриншот", callback_data="paid:send_screenshot")], [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:single:req", icon_custom_emoji_id=E_BACK)]])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 @dp.callback_query(lambda c: c.data == "pay:single:grp")
 async def cb_pay_single_grp(callback: CallbackQuery):
     await callback.answer()
-    text = f"<b>Групповое занятие</b>\n\nСтоимость: <b>500 ₽</b>\n\n<b>Реквизиты для оплаты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nПосле перевода отправьте скриншот."
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📸 Отправить скриншот", callback_data="paid:send_screenshot")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:single:req", icon_custom_emoji_id=E_BACK)]
-    ])
+    text = f"<b>Групповое занятие</b>\n\nСтоимость: <b>500 ₽</b>\n\n<b>Реквизиты:</b>\nЯндекс Банк: <code>+7 927 217-38-06</code>\n\nОтправьте скриншот."
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📸 Скриншот", callback_data="paid:send_screenshot")], [InlineKeyboardButton(text="⬅️ Назад", callback_data="pay:single:req", icon_custom_emoji_id=E_BACK)]])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 @dp.callback_query(lambda c: c.data == "paid:send_screenshot")
@@ -768,8 +776,79 @@ async def resch_apply(message: types.Message, state: FSMContext):
         if lesson: lesson.datetime_start = new_dt; await session.commit()
     await message.answer("✅ Перенесено!", reply_markup=main_menu_teacher()); await state.clear()
 
-async def health(request): return web.Response(text="OK")
+# --- ЗАПИСЬ УЧЕНИКА НА СВОБОДНЫЕ СЛОТЫ ---
+@dp.callback_query(lambda c: c.data == "stu_book:calendar")
+async def cb_stu_book_calendar(callback: CallbackQuery):
+    await callback.answer()
+    now = now_msk()
+    async with async_session() as session:
+        slots = (await session.execute(select(LessonSlot).where(LessonSlot.is_booked == False))).scalars().all()
+    days_slots = {s.datetime_start.day for s in slots if s.datetime_start.month == now.month}
+    kb = calendar_keyboard(now.year, now.month, set(), days_slots, prefix="stu_book")
+    await callback.message.edit_text("📅 Выбери день для записи:", reply_markup=kb)
 
+@dp.callback_query(lambda c: c.data.startswith("stu_book:init:"))
+async def cb_stu_book_init(callback: CallbackQuery):
+    await callback.answer()
+    y, m = int(callback.data.split(":")[2]), int(callback.data.split(":")[3])
+    async with async_session() as session:
+        slots = (await session.execute(select(LessonSlot).where(LessonSlot.is_booked == False))).scalars().all()
+    days_slots = {s.datetime_start.day for s in slots if s.datetime_start.month == m}
+    kb = calendar_keyboard(y, m, set(), days_slots, prefix="stu_book")
+    await callback.message.edit_text("📅 Выбери день:", reply_markup=kb)
+
+@dp.callback_query(lambda c: c.data.startswith("stu_book:day:"))
+async def cb_stu_book_day(callback: CallbackQuery):
+    await callback.answer()
+    y, m, d = map(int, callback.data.split(":")[2].split("-"))
+    dt_s, dt_e = datetime(y, m, d, 0, 0), datetime(y, m, d, 23, 59)
+    async with async_session() as session:
+        slots = (await session.execute(select(LessonSlot).where(LessonSlot.datetime_start >= dt_s, LessonSlot.datetime_start <= dt_e, LessonSlot.is_booked == False).order_by(LessonSlot.datetime_start))).scalars().all()
+    if not slots: return await callback.message.edit_text("На этот день нет свободных слотов.", reply_markup=back_to_main())
+    b = [[InlineKeyboardButton(text=s.datetime_start.strftime("%H:%M"), callback_data=f"stu_book:pick:{s.id}")] for s in slots]
+    b.append([InlineKeyboardButton(text="Назад", callback_data="stu_book:calendar")])
+    await callback.message.edit_text("Выбери время:", reply_markup=InlineKeyboardMarkup(inline_keyboard=b))
+
+@dp.callback_query(lambda c: c.data.startswith("stu_book:pick:"))
+async def cb_stu_book_pick(callback: CallbackQuery):
+    await callback.answer()
+    slot_id = int(callback.data.split(":")[2])
+    async with async_session() as session:
+        slot = await session.get(LessonSlot, slot_id)
+        st = (await session.execute(select(Student).where(Student.tg_id == callback.from_user.id))).scalar_one_or_none()
+        if not st or not slot: return
+        slot.is_booked = True 
+        await session.commit()
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"stu_book:approve:{slot.id}:{st.tg_id}"), InlineKeyboardButton(text="❌ Отклонить", callback_data=f"stu_book:decline:{slot.id}:{st.tg_id}")]])
+    await bot.send_message(TEACHER_ID, f"🆕 <b>Запрос на занятие</b>\n\nУченик: {st.full_name}\nХочет: {slot.datetime_start.strftime('%d.%m %H:%M')}", reply_markup=kb, parse_mode="HTML")
+    await callback.message.edit_text("✅ Запрос отправлен преподавателю! Ожидайте подтверждения.", reply_markup=back_to_main())
+
+@dp.callback_query(lambda c: c.data.startswith("stu_book:approve:"))
+async def cb_stu_book_approve(callback: CallbackQuery):
+    await callback.answer("Подтверждено")
+    if not is_teacher(callback.from_user.id): return
+    _, _, slot_id, student_tg_id = callback.data.split(":")
+    async with async_session() as session:
+        slot = await session.get(LessonSlot, int(slot_id))
+        st = (await session.execute(select(Student).where(Student.tg_id == int(student_tg_id)))).scalar_one_or_none()
+        if slot and st:
+            session.add(Lesson(student_id=st.id, datetime_start=slot.datetime_start, title="Корейский"))
+            await session.delete(slot); await session.commit()
+            await callback.message.edit_text("✅ Вы подтвердили запись.")
+            await bot.send_message(st.tg_id, f"✅ Преподаватель подтвердил вашу запись на {slot.datetime_start.strftime('%d.%m %H:%M')}!")
+
+@dp.callback_query(lambda c: c.data.startswith("stu_book:decline:"))
+async def cb_stu_book_decline(callback: CallbackQuery):
+    await callback.answer("Отклонено")
+    if not is_teacher(callback.from_user.id): return
+    _, _, slot_id, student_tg_id = callback.data.split(":")
+    async with async_session() as session:
+        slot = await session.get(LessonSlot, int(slot_id))
+        if slot: slot.is_booked = False; await session.commit()
+    await callback.message.edit_text("❌ Вы отклонили запись. Слот снова свободен.")
+    await bot.send_message(int(student_tg_id), "❌ Преподаватель отклонил запись на это время. Пожалуйста, выберите другое.")
+
+async def health(request): return web.Response(text="OK")
 async def on_startup(bot: Bot) -> None:
     await init_db()
     await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET, drop_pending_updates=True, allowed_updates=["message", "callback_query"])
