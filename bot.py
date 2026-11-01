@@ -1,5 +1,5 @@
 import logging
-import os...
+import os
 from datetime import datetime, timedelta
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
