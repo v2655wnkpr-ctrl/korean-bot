@@ -322,7 +322,7 @@ async def cb_actcal_time(callback: CallbackQuery, state: FSMContext):
             return await callback.message.edit_text("⚠️ На это время уже есть занятие!", reply_markup=back_to_main())
             
     await state.update_data(dt=dt)
-    await callback.message.edit_text("Введи название занятия (или «-» для «Корейский»):")
+    await callback.message.edit_text("Введи название занятия (или «-» для «Корейский язык»):")
     await state.set_state(AddLesson.title)
 
 @dp.message(AddLesson.dt)
