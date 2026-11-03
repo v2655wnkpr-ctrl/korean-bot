@@ -273,9 +273,57 @@ async def add_student(message: types.Message, state: FSMContext):
             for s in (await session.execute(select(Student))).scalars().all():
                 if s.tg_id != TEACHER_ID and (low == (s.username or "").lower() or low in s.full_name.lower()): sid = s.id; break
     if not sid: return await message.answer("Не нашёл.")
-    async with async_session() as session: student = await session.get(Student, sid)
+    
+    async with async_session() as session: 
+        student = await session.get(Student, sid)
+        
     await state.update_data(sid=student.id, sname=(student.custom_name or student.full_name))
-    await message.answer(f"Ученик: {student.custom_name or student.full_name}\n\nВведи дату:\nДД.ММ.ГГГГ ЧЧ:ММ"); await state.set_state(AddLesson.dt)
+    
+    now = now_msk()
+    kb = calendar_keyboard(now.year, now.month, set(), prefix="actcal")
+    kb.inline_keyboard.insert(-1, [InlineKeyboardButton(text="✍️ Ввести вручную", callback_data="actcal:manual")])
+    
+    await message.answer(
+        f"Ученик: {student.custom_name or student.full_name}\n\nВыбери дату в календаре или нажми «Ввести вручную»:", 
+        reply_markup=kb
+    )
+@dp.callback_query(lambda c: c.data.startswith("actcal:init:"))
+async def cb_actcal_init(callback: CallbackQuery):
+    await callback.answer()
+    y, m = int(callback.data.split(":")[2]), int(callback.data.split(":")[3])
+    kb = calendar_keyboard(y, m, set(), prefix="actcal")
+    kb.inline_keyboard.insert(-1, [InlineKeyboardButton(text="✍️ Ввести вручную", callback_data="actcal:manual")])
+    await callback.message.edit_text("📅 Выбери дату:", reply_markup=kb)
+
+@dp.callback_query(lambda c: c.data.startswith("actcal:day:"))
+async def cb_actcal_day(callback: CallbackQuery):
+    await callback.answer()
+    date_str = callback.data.split(":")[2]
+    y, m, d = map(int, date_str.split("-"))
+    kb = lesson_time_keyboard(date_str)
+    await callback.message.edit_text(f"📅 {d}.{m:02d}.{y}\n\nВыбери время:", reply_markup=kb)
+
+@dp.callback_query(lambda c: c.data == "actcal:manual")
+async def cb_actcal_manual(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await callback.message.edit_text("Введи дату и время в формате:\nДД.ММ.ГГГГ ЧЧ:ММ")
+    await state.set_state(AddLesson.dt)
+
+@dp.callback_query(lambda c: c.data.startswith("actcal:time:"))
+async def cb_actcal_time(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    parts = callback.data.split(":")
+    date_str = parts[2]
+    time_str = parts[3]
+    dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+    
+    async with async_session() as session:
+        if (await session.execute(select(Lesson).where(Lesson.datetime_start == dt))).scalars().first():
+            return await callback.message.edit_text("⚠️ На это время уже есть занятие!", reply_markup=back_to_main())
+            
+    await state.update_data(dt=dt)
+    await callback.message.edit_text("Введи название занятия (или «-» для «Корейский»):")
+    await state.set_state(AddLesson.title)
 
 @dp.message(AddLesson.dt)
 async def add_dt(message: types.Message, state: FSMContext):
