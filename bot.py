@@ -325,15 +325,6 @@ async def cb_actcal_time(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text("Введи название занятия (или «-» для «Корейский язык»):")
     await state.set_state(AddLesson.title)
 
-@dp.message(AddLesson.dt)
-async def add_dt(message: types.Message, state: FSMContext):
-    try: dt = datetime.strptime(message.text.strip(), "%d.%m.%Y %H:%M")
-    except ValueError: return await message.answer("Формат: 15.10.2026 18:30")
-    async with async_session() as session:
-        if (await session.execute(select(Lesson).where(Lesson.datetime_start == dt))).scalars().first():
-            return await message.answer("⚠️ На это время уже есть занятие!")
-    await state.update_data(dt=dt); await message.answer("Название (или «-»):"); await state.set_state(AddLesson.title)
-
 @dp.message(AddLesson.title)
 async def add_title(message: types.Message, state: FSMContext):
     data = await state.get_data()
