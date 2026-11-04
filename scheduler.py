@@ -46,7 +46,7 @@ async def check_lessons(bot):
                     
             # Ссылка на урок за 30 минут
             if int(diff_minutes) == 30:
-                text = f"🔗 Скоро урок! Подключайся:\n\n📅 {local_lesson_time.strftime('%H:%M')}\nСсылка: (тут будет твоя ссылка)"
+                text = f"🔗 Скоро урок! Подключайся:\n\n📅 {local_lesson_time.strftime('%H:%M')}\nСсылка: https://telemost.yandex.ru/j/30468872120431"
                 try:
                     await bot.send_message(st.tg_id, text)
                 except Exception:
