@@ -36,16 +36,17 @@ async def check_lessons(bot):
             
             diff_minutes = (local_lesson_time - local_now).total_seconds() / 60
             
-            # Напоминание за N часов (проверяем с точностью до минуты)
-            if int(diff_minutes) == int(remind_hours * 60):
+            # Напоминание за N часов (с защитой от задержки сервера в ±1 мин)
+            target_minutes = remind_hours * 60
+            if (target_minutes - 1) <= diff_minutes <= (target_minutes + 1):
                 text = f"🔔 Напоминание: у тебя занятие через {remind_hours} ч.\n\n📅 {local_lesson_time.strftime('%d.%m %H:%M')}\n📚 {lesson.title}"
                 try:
                     await bot.send_message(st.tg_id, text)
                 except Exception:
                     pass
                     
-            # Ссылка на урок за 30 минут
-            if int(diff_minutes) == 30:
+            # Ссылка на урок за 30 минут (с защитой от задержки сервера)
+            if 29 <= diff_minutes <= 30:
                 text = f"🔗 Скоро урок! Подключайся:\n\n📅 {local_lesson_time.strftime('%H:%M')}\nСсылка: https://telemost.yandex.ru/j/30468872120431"
                 try:
                     await bot.send_message(st.tg_id, text)
@@ -60,7 +61,7 @@ async def check_homework_reminders(bot):
         return
 
     async with async_session() as session:
-        # Берем всех учеников, у кого включены напоминания
+        # Берем всех учеников, у кого включены напоминания (жестко исключая препода)
         q_st = select(Student).where(
             Student.tg_id != 803167669, 
             Student.hw_reminder_enabled == True
@@ -69,6 +70,10 @@ async def check_homework_reminders(bot):
         students = r_st.scalars().all()
         
         for st in students:
+            # Двойная защита: если препод каким-то образом попал в список, пропускаем его
+            if st.tg_id == 803167669:
+                continue
+                
             # Ищем все ДЗ
             q_hw = select(Homework)
             r_hw = await session.execute(q_hw)
@@ -76,6 +81,9 @@ async def check_homework_reminders(bot):
             
             uncompleted = []
             for hw in all_hws:
+                # Показываем только те ДЗ, что назначены лично ему или всем
+                if hw.target_student_id is not None and hw.target_student_id != st.id:
+                    continue
                 q_done = select(HomeworkDone).where(
                     HomeworkDone.homework_id == hw.id,
                     HomeworkDone.student_id == st.id
@@ -100,4 +108,4 @@ def start_scheduler(bot):
     scheduler.add_job(check_lessons, 'interval', minutes=1, args=[bot])
     scheduler.add_job(check_homework_reminders, 'interval', minutes=1, args=[bot])
     scheduler.start()
-    logging.info("Планировщик запущен") 
+    logging.info("Планировщик запущен")
