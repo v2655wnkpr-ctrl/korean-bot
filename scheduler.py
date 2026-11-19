@@ -63,7 +63,7 @@ async def check_homework_reminders(bot):
     async with async_session() as session:
         # Берем всех учеников, у кого включены напоминания (жестко исключая препода)
         q_st = select(Student).where(
-            Student.tg_id != 803167669, 
+            Student.tg_id != 8611242980, 
             Student.hw_reminder_enabled == True
         )
         r_st = await session.execute(q_st)
@@ -71,7 +71,7 @@ async def check_homework_reminders(bot):
         
         for st in students:
             # Двойная защита: если препод каким-то образом попал в список, пропускаем его
-            if st.tg_id == 803167669:
+            if st.tg_id == 8611242980:
                 continue
                 
             # Ищем все ДЗ
