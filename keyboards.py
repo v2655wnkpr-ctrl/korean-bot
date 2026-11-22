@@ -138,3 +138,11 @@ def lesson_time_keyboard(date_str: str):
     b.append([InlineKeyboardButton(text="✍️ Ввести вручную", callback_data="actcal:manual")])
     b.append([InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)])
     return InlineKeyboardMarkup(inline_keyboard=b)
+def select_student_kb(students, action="add"):
+    b = []
+    for s in students:
+        name = s.custom_name or s.full_name
+        b.append([InlineKeyboardButton(text=name, callback_data=f"sel_stud:{action}:{s.id}")])
+    b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=b)
+
