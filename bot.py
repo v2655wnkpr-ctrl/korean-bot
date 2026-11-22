@@ -41,8 +41,6 @@ class RescheduleFlow(StatesGroup):
     dt = State()
 class PaymentProof(StatesGroup):
     waiting_photo = State()
-class TransferFlow(StatesGroup):
-    reason = State()
 class SetCustomName(StatesGroup):
     waiting_name = State()
 class AddHomework(StatesGroup):
@@ -617,7 +615,7 @@ async def cb_stdel_confirm(callback: CallbackQuery):
         await session.commit()
     await callback.message.edit_text("✅ Удалён.", reply_markup=back_to_main())
 
-# ---------- ПЕРЕНОСЫ ----------
+# ---------- ПЕРЕНОСЫ (ТОЛЬКО ЧЕРЕЗ КАЛЕНДАРЬ) ----------
 
 @dp.callback_query(lambda c: c.data == "menu:reschedule")
 async def cb_reschedule(callback: CallbackQuery):
@@ -649,19 +647,15 @@ async def resch_apply(message: types.Message, state: FSMContext):
                 except Exception: pass
     await message.answer("✅ Перенесено!", reply_markup=main_menu_teacher()); await state.clear()
 
+# УЧЕНИК ЖМЕТ "ПЕРЕНЕСТИ" -> СРАЗУ ОТКРЫВАЕТСЯ КАЛЕНДАРЬ
 @dp.callback_query(lambda c: c.data == "transfer:click")
 async def cb_transfer_click(callback: CallbackQuery):
     await callback.answer()
-    await callback.message.edit_text(
-        "🔄 <b>Перенос занятия</b>\n\nВыбери, как хочешь перенести:",
-        reply_markup=student_transfer_menu(),
-        parse_mode="HTML"
-    )
+    # Сразу перенаправляем на выбор слота из календаря
+    await cb_transfer_ask_slot(callback)
 
-# --- КАЛЕНДАРЬ ПЕРЕНОСА ДЛЯ УЧЕНИКА ---
 @dp.callback_query(lambda c: c.data == "transfer:ask_slot")
 async def cb_transfer_ask_slot(callback: CallbackQuery):
-    await callback.answer()
     async with async_session() as session:
         st = (await session.execute(select(Student).where(Student.tg_id == callback.from_user.id))).scalar_one_or_none()
         slots = (await session.execute(select(LessonSlot).where(LessonSlot.is_booked == False))).scalars().all()
@@ -775,17 +769,7 @@ async def cb_transfer_decline(callback: CallbackQuery):
         try: await bot.send_message(student_tg_id, "❌ Преподаватель не может согласовать это время. Скоро свяжусь с вами.")
         except Exception: pass
 
-@dp.callback_query(lambda c: c.data == "transfer:cancel")
-async def cb_transfer_cancel(callback: CallbackQuery, state: FSMContext):
-    await callback.answer(); await callback.message.edit_text(text_transfer_cancel(), reply_markup=back_to_main()); await state.clear()
-
-@dp.message(TransferFlow.reason)
-async def transfer_reason(message: types.Message, state: FSMContext):
-    try: await bot.send_message(TEACHER_ID, f"🔄 Запрос на перенос\nУченик: {message.from_user.full_name}\nПричина: {message.text.strip()}")
-    except Exception: pass
-    await message.answer(text_transfer_sent(), reply_markup=back_to_main()); await state.clear()
-
-# ---------- ОПЛАТА (КНОПКАМИ) ----------
+# ---------- ОПЛАТА ----------
 
 @dp.callback_query(lambda c: c.data == "menu:pay")
 async def cb_pay(callback: CallbackQuery):
@@ -1065,7 +1049,6 @@ async def cb_hw_del_ask(callback: CallbackQuery):
     b = [[InlineKeyboardButton(text="Да, удалить", callback_data=f"hw:del:{hw_id}")], [InlineKeyboardButton(text="Отмена", callback_data="menu:hw")]]
     await callback.message.edit_text("Точно удалить?", reply_markup=InlineKeyboardMarkup(inline_keyboard=b))
 
-# ИСПРАВЛЕН БАГ С УДАЛЕНИЕМ (split(":")[1] на split(":")[2])
 @dp.callback_query(lambda c: c.data.startswith("hw:del:"))
 async def cb_hw_del(callback: CallbackQuery):
     await callback.answer()
