@@ -18,7 +18,7 @@ from keyboards import *
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-TEACHER_ID = 8611242980 # ID КОРЕЙСКОГО БОТА
+TEACHER_ID = 803167669 # ID КОРЕЙСКОГО БОТА
 if not BOT_TOKEN: raise ValueError("Не найден BOT_TOKEN")
 logging.basicConfig(level=logging.INFO)
 URL = os.getenv("WEBHOOK_URL", "http://localhost").rstrip("/")
