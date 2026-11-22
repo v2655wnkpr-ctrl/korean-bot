@@ -74,7 +74,7 @@ def calendar_keyboard(year, month, days_with_lessons, free_slots_days=None, pref
     
     if prefix == "slot": back_cb = "menu:slots"
     elif prefix == "stu_book": back_cb = "menu:lessons"
-    elif prefix == "trans_cal": back_cb = "transfer:click"
+    elif prefix == "trans_cal": back_cb = "menu:lessons"
     else: back_cb = "menu:main"
     
     kb.append([InlineKeyboardButton(text="Назад", callback_data=back_cb, icon_custom_emoji_id=E_BACK)])
@@ -138,7 +138,6 @@ def set_paid_students_keyboard(students): return InlineKeyboardMarkup(inline_key
 def set_paid_amounts_keyboard(sid, current): return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="4 зан.", callback_data=f"spa:{sid}:4"), InlineKeyboardButton(text="8 зан.", callback_data=f"spa:{sid}:8")], [InlineKeyboardButton(text="➖ -1", callback_data=f"spa:{sid}:{current-1}"), InlineKeyboardButton(text=f"Сейчас: {current}", callback_data="ignore"), InlineKeyboardButton(text="➕ +1", callback_data=f"spa:{sid}:{current+1}")], [InlineKeyboardButton(text="Обнулить", callback_data=f"spa:{sid}:0", icon_custom_emoji_id=E_DELETE)], [InlineKeyboardButton(text="Назад", callback_data="sp:open", icon_custom_emoji_id=E_BACK)]])
 def confirm_delete_student_keyboard(sid): return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Да", callback_data=f"stdel:{sid}", icon_custom_emoji_id=E_DELETE), InlineKeyboardButton(text="Нет", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
 
-# ИСПРАВЛЕН CALLBACK НА pay:show_tariffs:single
 def paid_button_keyboard(): 
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Посмотреть абонементы", callback_data="pay:show_tariffs:single", icon_custom_emoji_id=E_LIST)], 
@@ -146,7 +145,6 @@ def paid_button_keyboard():
     ])
 
 def back_from_paid_keyboard(): return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="paid:back", icon_custom_emoji_id=E_DELETE)]])
-def transfer_cancel_keyboard(): return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="transfer:cancel", icon_custom_emoji_id=E_DELETE)]])
 def lessons_action_keyboard(lessons, action): return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"{l.datetime_start.strftime('%d.%m %H:%M')} — {l.title}", callback_data=f"{action}:{l.id}")] for l in lessons[:15]] + [[InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
 def confirm_delete_keyboard(lid): return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Удалить", callback_data=f"confirm_del:{lid}", icon_custom_emoji_id=E_DELETE), InlineKeyboardButton(text="Отмена", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]])
 
@@ -170,7 +168,6 @@ def hw_assign_list_kb(hws, student_id):
 def hw_view_teacher_keyboard(hw_id):
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать текст", callback_data=f"hw:edit_text:{hw_id}")], [InlineKeyboardButton(text="Удалить ДЗ", callback_data=f"hw:del_ask:{hw_id}", icon_custom_emoji_id=E_DELETE)], [InlineKeyboardButton(text="Назад", callback_data="hw:list_teacher", icon_custom_emoji_id=E_BACK)]])
 
-# НОВЫЕ ФУНКЦИИ ДЛЯ ВЫБОРА УЧЕНИКА И ПЕРЕНОСА
 def select_student_kb(students, action="add"):
     b = []
     for s in students:
@@ -178,10 +175,3 @@ def select_student_kb(students, action="add"):
         b.append([InlineKeyboardButton(text=name, callback_data=f"sel_stud:{action}:{s.id}")])
     b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)])
     return InlineKeyboardMarkup(inline_keyboard=b)
-
-def student_transfer_menu():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📅 Выбрать время из слотов", callback_data="transfer:ask_slot", icon_custom_emoji_id=E_CALENDAR)],
-        [InlineKeyboardButton(text="✍️ Написать причину", callback_data="transfer:click", icon_custom_emoji_id=E_TRANSFER)],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]
-    ])
