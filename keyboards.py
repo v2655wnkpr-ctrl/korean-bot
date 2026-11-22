@@ -77,7 +77,12 @@ def calendar_keyboard(year, month, days_with_lessons, free_slots_days=None, pref
 
 def time_picker_keyboard(selected_times=None):
     if selected_times is None: selected_times = set()
-    hours = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"]
+    hours = []
+    for h in range(12, 22):
+        hours.append(f"{h:02d}:00")
+        hours.append(f"{h:02d}:30")
+    hours.append("22:00")
+    
     b, row = [], []
     for h in hours:
         mark = "✅" if h in selected_times else ""
@@ -86,6 +91,22 @@ def time_picker_keyboard(selected_times=None):
     if row: b.append(row)
     b.append([InlineKeyboardButton(text="💾 Сохранить выбранные", callback_data="time:save")])
     b.append([InlineKeyboardButton(text="Назад", callback_data="menu:slots", icon_custom_emoji_id=E_BACK)])
+    return InlineKeyboardMarkup(inline_keyboard=b)
+
+def lesson_time_keyboard(date_str: str):
+    hours = []
+    for h in range(12, 22):
+        hours.append(f"{h:02d}:00")
+        hours.append(f"{h:02d}:30")
+    hours.append("22:00")
+    
+    b, row = [], []
+    for h in hours:
+        row.append(InlineKeyboardButton(text=h, callback_data=f"actcal:time:{date_str}:{h}"))
+        if len(row) == 4: b.append(row); row = []
+    if row: b.append(row)
+    b.append([InlineKeyboardButton(text="✍️ Ввести вручную", callback_data="actcal:manual")])
+    b.append([InlineKeyboardButton(text="Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)])
     return InlineKeyboardMarkup(inline_keyboard=b)
 
 def slots_menu_teacher():
@@ -145,4 +166,9 @@ def select_student_kb(students, action="add"):
         b.append([InlineKeyboardButton(text=name, callback_data=f"sel_stud:{action}:{s.id}")])
     b.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=b)
-
+def student_transfer_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📅 Выбрать время из слотов", callback_data="transfer:ask_slot")],
+        [InlineKeyboardButton(text="✍️ Написать причину", callback_data="transfer:click")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main", icon_custom_emoji_id=E_BACK)]
+    ])
