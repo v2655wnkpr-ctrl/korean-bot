@@ -1162,7 +1162,7 @@ async def main():
     try:
         await dp.start_polling(bot)
     finally:
-        await bot.session.close()
+        .await bot.session.close()
 
 if __name__ == "__main__":
     import asyncio
