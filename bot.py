@@ -1154,17 +1154,16 @@ async def cb_main(callback: CallbackQuery, state: FSMContext):
 async def cb_help(callback: CallbackQuery):
     await callback.answer(); await callback.message.edit_text(text_help(), reply_markup=back_to_main())
 
-async def health(request): return web.Response(text="OK")
-async def on_startup(bot: Bot) -> None:
+async def main():
     await init_db()
-    await bot.set_webhook(f"{URL}{PATH}", secret_token=SECRET, drop_pending_updates=True, allowed_updates=["message", "callback_query"])
+    await bot.delete_webhook(drop_pending_updates=True)
     start_scheduler(bot)
 
-app = web.Application()
-SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=SECRET).register(app, path=PATH)
-app.router.add_get("/health", health)
-setup_application(app, dp, bot=bot)
-dp.startup.register(on_startup)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
 
 if __name__ == "__main__":
-    web.run_app(app, host=HOST, port=PORT)
+    import asyncio
+    asyncio.run(main())
